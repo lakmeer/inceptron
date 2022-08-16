@@ -1,0 +1,15 @@
+
+" Footer Component
+
+from /^^^/grid/WebAdaptor/Dom use Div, Para, Footer
+from /^^^/std/time use Now
+
+<Footer
+  :background :color `navy
+  :padding 10px
+  :text-align `center
+
+  local Time now
+
+  <Para "myTodoList &copy; {now.yyyy()}
+

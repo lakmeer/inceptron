@@ -1,0 +1,19 @@
+
+"
+" Login Button
+"
+
+from /^^^/grid/WebAdaptor/Dom use Form, Input, Button
+
+class Login
+  emits !login (Str username, Str password)
+
+  local Str username
+  local Str password
+
+  <Form
+    on !submit then emit !login(username, password)
+    <Input @value <-> username; @type=`text
+    <Input @value <-> password; @type=`password
+    <Button "Log In" on !click then emit !submit
+

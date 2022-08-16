@@ -1,0 +1,14 @@
+lockfileVersion: 5.3
+
+specifiers:
+  console-log-colors: ^0.2.3
+
+dependencies:
+  console-log-colors: 0.2.3
+
+packages:
+
+  /console-log-colors/0.2.3:
+    resolution: {integrity: sha512-KAGsePEunvs575RFAIThR7sUBVuqXU0Y2tckA99k25itVAOa0hPwf3HkNVyQ7XnbisKvTp/gLnByjG9NTYt3hw==}
+    engines: {node: '>= 4.1.0'}
+    dev: false

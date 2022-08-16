@@ -1,0 +1,143 @@
+
+"
+" An old example, including explicit context
+"
+
+load /std use all
+
+load /std/Viewport use $, overflow
+load /std/Router use $, Route
+load /std/ctx/CookieSession
+
+load /std/App
+load /std/Dom
+
+load /std/ui/ErrorBox
+load /std/time/Weekday use $, today
+
+" loads the module Todo from source and brings Todo into the namespace
+load /src/Todo
+
+
+" Aliases we will use in this scope
+class Main extends Dom.Div
+class Title extends Dom.H1
+class Text extends Dom.Span
+class TodoList extends Dom.Ul
+
+" Store that is accessible by name inside this scope
+context CookieSession session
+
+" All modules must yeild a Root instance as their base. It will be optimised away
+" Any code that happens before root is 'module-level' like in Svelte
+" Any code _inside_ Root happens when the component is created
+<Root
+
+  " Immutable
+  appTitle = "Hello Sailor"
+
+  " Mutable
+  prop todos = <Todo's
+
+  " Pure function
+  func Number add = (Number: a, Number: b) -> a + b
+
+  " Dirty procedure
+  proc addTodo = (Str text, Weekday day) ->
+    todos ~= <Todo body=text due=day
+    session.remember(todos)
+
+  " App Root
+  <App
+    title={appTitle}
+    icon=/assets/favicon.png
+
+    <Viewport
+      overflow: vertical: `grow, horizontal: `crop
+      padding: 0
+      background: rgb(128, 100, 20)
+
+      <Header
+        <NavBar
+          background: navy
+          text-align: center
+          vertical-align: center
+          height: 20vh
+          <Text "Todos
+
+        <Main
+          <Router
+            watch todos for `~= then @setRoute("/notice")
+
+            <Route "/notice"
+              <Title
+                <Text "Todos have been updated
+                <Button "Return
+                  on !click then ^Router.goBack()
+
+            <Route "/error"
+              <ErrorBox
+                text="A todo was pushed"
+                options=[
+                  " modules can have a stdin argument which doesn't need a name. it can be typed
+                  <Option "Ok"
+                    on $`click then $dismiss
+                  <Option "No"
+                    on $`click then $dismiss
+
+            <Route "/options"
+              <Title
+                <Text "Options
+
+              <Menu am Expander expander
+
+                <- am expander.trigger
+                  if expander.isOpen then
+                    color: "red
+                  else
+                    color: "blue
+
+                class MenuGroupTitle extends Dom.H3
+                  margin:bottom:2em
+
+                <MenuGroup
+                  <MenuGroupTitle am expander.trigger(`properties)
+                    <Text "Properties
+
+                  <MenuGroupOptions am expander.target(`properties)
+                    <MenuItem name="Size"
+                    <MenuItem name="Colour"
+                    <MenuItem name="Length"
+
+                  <MenuGroupTitle am expander.trigger(`qualities)
+                    <Text "Properties
+
+                  <MenuGroupOptions am expander.target(`qualities)
+                    <MenuItem name="Brightness"
+                    <MenuItem name="Density"
+                    <MenuItem name="Refractive Index"
+
+
+            <Route "/"
+              <Title
+                <Text "Your TODOs for today:
+
+              <Dom.Form
+                on @!submit then |FormData data|
+                  addTodo(data.text, data.day)
+
+                <Text "Add a new Todo item
+                <TextInput name="text" value=null
+                <DateInput name="day"  value=today()
+                <Button on click then ^Dom.Form.submit
+
+              <TodoList
+                padding: 10
+
+                yield
+                  watch todos for $done then
+                    session.remember(todos)
+
+                  <Dom.Li
+                    yield todo
+

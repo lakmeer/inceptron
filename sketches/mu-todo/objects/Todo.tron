@@ -1,0 +1,25 @@
+
+"
+" Todo Object representation
+"
+
+class Todo
+  local Str text
+  local Bool done
+
+  emits !todo-remove (Todo @)
+
+  from /^^^/grid/WebAdaptor/Dom use Div, Label, Checkbox
+
+  <Div
+    :padding :all 10px
+    :border :width 1px :color `grey
+
+    <Label text :
+
+    <Checkbox
+      @checked <- done
+
+    <Button "X"
+      on !click emit !todo-remove
+

@@ -1,0 +1,26 @@
+
+"
+" The Header Component
+"
+
+from /^^^/grid/WebAdaptor/Dom use H1, Button
+
+from /./objects/User           use User
+from /./components/Logo        use Logo
+from /./components/Button      use Button
+from /./components/Login       use Login
+from /./components/UserAvatar  use UserAvator
+
+class Header
+  takes User user
+  emits !logout
+
+  <Logo src=/
+
+  <Dom.H1 "MyTodoList"
+
+  if user.isLoggedIn then
+    <UserAvatar @user
+    <Dom.Button "Log Out" on !click then emit !logout
+  else
+    <Login

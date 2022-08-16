@@ -1,0 +1,13 @@
+
+" Super simple example
+
+node Base
+  local Int i = 5
+
+  if i == 5 then
+    log("YES!")
+  else
+    log("No :(")
+
+  ...
+

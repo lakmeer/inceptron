@@ -1,0 +1,23 @@
+/#
+#compiler /std/compiler/clang
+#runtime  /std/runtime/CLI
+/renderers/InteractiveTerminal as Renderer
+
+
+" Comments are just unyielded strings. They will be culled at compile time.
+
+
+Int myNumber <- random(100)
+
+" await will sit on this point until the subtree yeilds
+
+await Renderer.whenReady()
+
+yeild <Root
+  <Renderer `renderer type=InteractiveTerminal
+    yeild "Guess the number:"
+    Int response <- Int.cast(Str, await Renderer.getStdIn())
+
+    if response = myNumber then
+      yeild "
+

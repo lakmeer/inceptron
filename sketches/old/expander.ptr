@@ -1,0 +1,38 @@
+" `then` Block
+"   Basically like a ruby block, takes arguments if you want
+"   and counts as a new scope. Takes a std input as $ by default
+"
+" <- Anonymous Rep / Rep Query
+"   Represents a Rep but we don't know or care which one. Used for mixins
+"   and child selectors
+"
+" ... Ellipses
+"   This instance will not yeild a Rep
+"   We are going to specify mixins for rep query targets
+
+class Expander
+
+  triggers = peek `<- am @trigger
+  targets  = peek `<- am @targets
+
+  on trigger!click then
+    map triggers then $close()
+    select targets where $name == it.name then $open()
+
+  on !new then log "{$} was created! :D
+
+  on !die then log "{$} was deleted. :(
+
+  ...
+
+  <- am @trigger(Str name)
+    on !click emit !click
+
+  <- am @target(Str name)
+    Bool isOpen = false
+
+    :visible: isOpen
+
+    @open  = proc -> isOpen = true
+    @close = proc -> isOpen = false
+

@@ -1,0 +1,145 @@
+"
+"
+" Multi-User To-do App
+"
+" Log in to save and restore your valuable time-saving todo list.
+"
+
+" Load
+
+from /^^^/grid/std/ use all
+from /^^^/grid/std/fs use TextBuffer
+from /^^^/grid/env/dotenv@1.1 use DotEnv
+from /^^^/grid/db/mysql use MySqlClient
+from /^^^/grid/http-server use Server, Request, Response, Session, SocketBridge
+
+
+" Load Env
+
+Env = DotEnv.ConfigAutotype()
+local Env env = DotEnv.getConfig()
+
+broad MySqlClient db = <MySqlClient @name=env.DB_NAME @user=env.DB_USER @pass=env.DB_PASS @host=env.DB_HOST @port=env.DB_PORT
+
+
+" Launch a server (yields)
+
+<Server @port=8080
+  " The server is listening as long as it lives in scope.
+  " No need to call listen or anything, it just runs for its instance's lifetime
+
+  ...
+
+  forever
+    on !request then |Request req, Response res|
+      Path uri = req.uri.path
+
+      " Session
+
+      if req.cookies.sessionId
+        Session session = await db.one(Session) "Select * from `sessions` where uid=`{req.cookies.sessionId}`
+      else
+        Session session = <Session
+        await db.query "Insert into `sessions` (sessionId=`{session.id})`
+
+
+      " User Login
+
+      from /./objects/User use User
+
+      share User user = await db.one(User) "Select * from `users` where id=`{session.userId}` and isLoggedIn=`true`
+
+      on !login then |Str username, Str password|
+        userMatch = await db.one(User) "Select * from `users` where username=`{username}`
+
+        if userMatch
+          local Str salt = Bcrypt.salt()
+          local Str hash = Bcrypt.hash(password)
+
+          if user.hash == hash
+            session.userId = user.id
+            user := userMatch
+
+      on !logout then
+        db.query "Update `users` where id=`{user.id}` (isLoggedIn=false)
+        user := null
+
+
+      " Live data
+
+      from /./objects/Todo use Todo
+
+      share Todo`s todos = await db.many(Todo) "Select * from `todos`
+
+      on todos! then
+        await db.query "Delete * from `todos` where sessionId=`{session.id}`
+        todos >> db.query "Insert into `todos` (sessionId=`{session.id}` text=`{$text}` done=`{$done}`
+
+
+      " Helper functions
+
+      func Response staticFile = (Path src) ->
+        local TextBuffer file = from src
+        yield
+          <Response file.asStr()
+            @status=200
+            @headers.fileType = file.guessMimetype()
+
+
+      " Serve responses based on incoming uri
+
+      match req.type
+        to `get
+
+          match uri ?
+            to /assets/*, /favicon.ico, /sitemap.xml
+              !response staticFile(uri)
+
+            to /robots.txt
+              !response yield
+                "User-agent: *
+                "Disallow:
+
+        <Route get="/"
+          <SocketBridge @allow=[ todos, user }
+
+            on !todo-new then |Str text|
+              ^todos ~= <Todo @text @done=false
+
+            on !todo-remove then |$Todo todo|
+              ^todos ||= -> $ != todo
+
+            from /^^^/grid/WebAdaptor use WebAdaptor, WebAdaptor.Dom
+
+            emit !response
+              <WebAdaptor
+                <Viewport
+
+                  from /./components/Header use Header
+                  from /./components/Footer use Footer
+
+                  <Flex @dir=mode
+                    :width  100%
+                    :height 100%
+
+                    on !orientation-change then |$Str orientation|
+                      match orientation ==
+                        to "portrait"  then @dir := `vertical
+                        to "landscape" then @dir := `horizontal
+
+                    <Header =@user
+
+                    <Dom.Div
+                      <Dom.H2 "My Todos
+                      <Dom.Ul
+                        for todo in todos
+                          <Dom.Li
+                            <todo
+                      <Dom.H3 "Add a todo
+                        <Dom.Form
+                          local Str text
+                          @on !submit then emit !todo-new(text)
+                        <Dom.Input @value <-> text, type=`text
+
+                    <Footer
+

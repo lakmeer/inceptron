@@ -1,0 +1,202 @@
+"
+" Todo App
+" Copying structure from sveltekit-demo Todo example
+"
+
+load /std `all
+
+load /std/storage/LocalStorage
+load /std/vis/Dom
+load /std/vis/Viewport
+
+load /github/someguy/popular-ui-toolkit/utils/ErrorBox
+
+load /src/TodoList
+
+
+class Todo
+  Int  id
+  Str  text
+  Bool done = false
+  ...
+
+
+<Root
+  <App
+    <Viewport
+      <TodoApp
+        uniq LocalStorage session = <LocalStorage
+
+        " State
+        local Int lastId = 0
+        local Int upcompletedCount = 0
+        local Str status
+        local Str todoText
+
+        local Todo's todos = [ createTodo("Learn Inceptron", true) ]
+
+        " Functions
+        func Todo createTodo = (Str text, Bool done) ->
+          <Todo id={lastId += 1} =text =done
+
+        proc addTodo = (Str todoText) ->
+          todos ~= createTodo(todoText)
+
+        proc archiveCompleted = ->
+          todos ||= !$done
+          todos = [ todo for todo 
+
+        proc deleteTodo = (Int todoId) ->
+          todos ||= $id != todoId
+
+        proc toggleDone = (Int id) ->
+          todos ##
+            if $id == id then
+              ^done = not ^done
+
+        " Watchers and Listeners
+        watch upcompletedCount for !change then
+          status = "{upcompletedCount} of {todos.length} remaining
+
+        watch todos for ! then
+          upcompletedCount = count(todos || $done)
+
+        on !newTodo then |Str $ as text| todos ~= <Todo =text
+        on !delete then deleteTodo($id)
+        on !toggle then toggleDone($id)
+
+        " Vis
+        <Root
+
+          load /src/icons use ArchiveIcon, PlusIcon
+
+          class Title extends Dom.H2
+            font:weight:bold
+            align:text:center middle
+            text:gray-800
+            dark?text:gray-100
+
+          class FlexRow extends Dom.Div
+            display:flex
+
+          class ActionRow extends Dom.Div
+            flex
+
+          class Italics extends Text
+            font:style:italic
+            text:size:xs
+            justify:start
+            align:middle
+            items:center
+            yeild $
+
+
+          <Title "To Do App
+
+          <FlexRow
+            flex:1
+            padding:x:2u y:3u
+            justify:between
+
+            <Text "user id
+              text:gray-700
+              ?dark:text:gray-50
+              font:transform:uppercase
+              font:semibold
+              margin:x:1u
+
+            <Text Guid.cast(Str, session.user.userid)
+              text:size:xs
+              text:green-700
+              dark?text:green-200
+
+          <ActionRow
+            <Italics status
+              flex:1
+              padding:x:2u y:3u
+              text:gray-500
+              dark?text:gray-100">{}</div>
+
+            <Dom.Button
+              on !click then ^TodoApp.archiveCompleted()
+
+              aria-label="Archive Completed Todos"
+              type=`button
+
+              flex:inline
+              items:center
+              justify:center
+              padding:x:5u y:3
+              border:indigo 200
+              dark?border:indigo 200
+              text:base
+              font-medium
+              rounded-md
+              text-indigo-600
+              bg-white
+              dark:bg-transparent
+              dark:text-indigo-200
+              hover:bg-indigo-50
+              dark:hover:bg-gray-700
+
+              <ArchiveIcon>
+
+
+          <Dom.Form
+            flex
+            margin:top:1u
+            justify:between middle center
+
+            on !submit then
+              preventDefault then
+                emit !newTodo
+
+            <Dom.TextInput am Dom.Form.data
+              padding:x:2u y:3u
+              margin:x:2u
+              width:full
+              md:w-80
+              text:blue-800
+              placeholder:blue-600
+              dark?
+                text:blue-200
+                placeholder:blue-200
+                bg:gray-700
+              pos:rel
+              bg:white
+              rounded
+              text:size:sm
+              border:indigo-200
+              shadow
+              outline:none
+              focus?outline:none
+              focus?ring
+
+              placeholder="enter a new todo"
+              value=^todoText
+
+            <Dom.Button
+              flex:inline
+              items-center
+              justify-center
+              padding:x:5u y:3u
+              border:transparent
+              text:base
+              font:weight:medium
+              rounded:md
+              text-white
+              bg:indigo-600
+              hover?bg:indigo-700
+
+              disabled={not ^todoText}
+              ariaLabel="Enter a new Todo"
+
+          <Dom.Ul
+            flex:col
+            justify:between middle left
+
+            yield todos >> $ as todo
+              <TodoList =todo
+                pass !delete
+                pass !toggle
+

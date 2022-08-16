@@ -1,0 +1,18 @@
+
+" Slightly more complex example exhibiting various scope control keywords
+
+node Base
+  local Int i = 5
+  quiet Str text = "OK"
+  share Num x = 40
+  lift  Bool enabled = false
+  uniq  Com z = 1 e^i PI
+
+  proc save = (thing) ->
+    things ~= thing
+
+  proc remove = (thing) ->
+    things ||= (== thing)
+
+  ...
+
