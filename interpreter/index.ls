@@ -62,6 +62,7 @@ class Nothing
 
 class Attr
   (@name, @args) ->
+    @type = \Attr
 
   toString: (d = 0) ->
     pad = "  " * d
@@ -89,7 +90,7 @@ class Value
 
 
 class Block
-  (@type, @reach, @children) ->
+  (@type = "None", @reach, @children) ->
     if not (@children instanceof Array)
       @children = [ @children ]
 
@@ -124,9 +125,11 @@ class Block
         pad + "  " + red "?? Don't know how to print #{@type}"
 
     # If there's only one child, put it on the same line
-    if @children.0 instanceof Value and @children.length == 1
-      "#pad#head " + (@children.0.toString! + "\n") +
-        (@attrs.map (.toString(d + 1)) .join "\n")
+    if @children.length == 0 and @attrs.length == 0
+      "#pad#head"
+    else if @children.0 instanceof Value and @children.length == 1
+      "#pad#head " +
+        ((@children.map (.toString!)) ++ (@attrs.map (.toString(d + 1)))) .join "\n"
     else
       "#pad#head \n" +
         ((@attrs.map (.toString(d + 1))) ++ (@children.map stringify)).join "\n"
@@ -135,9 +138,6 @@ class Block
   # If a block has exactly one child, and the type of
   # the child is a perfect match for the scope type,
   # it can promoted up to collapse one level.
-
-  # TODO: Auto-collapse
-  # If a block has no type, collapse it into it's parent block
 
 
 # Main
@@ -164,6 +164,12 @@ each = (expr, env) ->
       new Nothing
 
     | \assign =>
+
+      ident = env[expr.name]
+      value = each expr.main, env
+
+      # TODO: Type check assignments
+
       env[expr.name] = each expr.main, env
       new Nothing
 
@@ -174,14 +180,16 @@ each = (expr, env) ->
       each expr.main, env
 
     | \timing =>
-      switch expr.freq
+      switch expr.type
       | \forever =>
-          set-immediate ->
-            log \DEFERRED-SCOPE, env
-            #each expr.main, env
+          # set-immediate -> each expr, env
           each expr.main, env
+      | \times =>
+        new Block \None, \local, do
+          for i from 1 to expr.freq
+            each expr.main, env
       | _ =>
-        warn "Unsupported timing frequency: '#{expr.freq}'"
+        warn "Unsupported timing type: '#{expr.type}'"
 
     | \binary =>
       left  = each expr.left, env
@@ -208,13 +216,17 @@ each = (expr, env) ->
       new Nothing
 
 
-  # Apply any yielded attrs to the current block
-
+  # Analyse yielded blocks
   if yld instanceof Block
-    [ attrs, others ] = partition (instanceof Attr), yld.children
-    log attrs.length, others.length
-    attrs.map -> yld.set-attr it
-    yld.children = others
+    new-children = []
+
+    for child, ix in yld.children
+      switch child.type
+      | \Attr => yld.set-attr child
+      | \None => new-children ++= child.children
+      | _     => new-children.push child
+
+    yld.children = new-children
 
   return yld
 
@@ -230,7 +242,7 @@ run = (ast) ->
 
 examples = require \./ast
 
-program = examples.simple
+program = examples.forever
 
 render = (.toString!)
 

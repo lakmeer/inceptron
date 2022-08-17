@@ -161,10 +161,16 @@ export forever = do
 
   local Int x = 0
 
+  times 5
+    x := x + 1
+    <Text "Hello Sailor"
+    <Text x
+
   forever
     x := x + 1
+
     <Box
-      :attr x
+      :attribute x
   """
   kind: \scope
   type: \Root
@@ -185,7 +191,55 @@ export forever = do
         main: 0
 
     * kind: \timing
-      freq: \forever
+      type: \times
+      freq: 5
+      over: 0
+      ease: null
+      main:
+        kind: \scope
+        type: \None
+        args: []
+        main: null
+        body:
+          * kind: \assign
+            name: \x
+            reach: \here
+            main:
+              kind: \binary
+              type: \Int
+              oper: \+
+              left:
+                kind: \ident
+                name: \x
+                reach: \here
+              right:
+                kind: \literal
+                type: \AutoInt
+                main: 1
+
+          * kind: \scope
+            type: \Text
+            args: []
+            main: null
+            body:
+              * kind: \literal
+                type: \AutoStr
+                main: "Hello Sailor"
+              ...
+          * kind: \scope
+            type: \Text
+            args: []
+            main: null
+            body:
+              * kind: \ident
+                name: \x
+                type: \Int
+              ...
+          ...
+
+    * kind: \timing
+      type: \forever
+      freq: 0
       over: 0
       ease: null
       main:
@@ -198,6 +252,7 @@ export forever = do
             reach: \here
             main:
               kind: \binary
+              type: \Int
               oper: \+
               left:
                 kind: \ident
@@ -214,7 +269,7 @@ export forever = do
             main: null
             body:
               * kind: \attr
-                name: \color
+                name: \attribute
                 args:
                   * kind: \ident
                     name: \x
