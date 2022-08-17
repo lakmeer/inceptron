@@ -136,6 +136,9 @@ class Block
   # the child is a perfect match for the scope type,
   # it can promoted up to collapse one level.
 
+  # TODO: Auto-collapse
+  # If a block has no type, collapse it into it's parent block
+
 
 # Main
 
@@ -146,8 +149,6 @@ each = (expr, env) ->
         expr.body
           .map    -> each it, env
           .filter -> not (it instanceof Nothing)  # Remove Expr`s that dont yield Blocks
-
-      # TODO: Detect yielded Attrs and apply them to this instance
 
     | \literal =>
       new Value expr.type, \local, expr.main
