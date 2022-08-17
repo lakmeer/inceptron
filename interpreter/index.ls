@@ -230,7 +230,7 @@ run = (ast) ->
 
 examples = require \./ast
 
-program = examples.example
+program = examples.simple
 
 render = (.toString!)
 
