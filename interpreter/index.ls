@@ -1,6 +1,7 @@
 
 # Imports
 
+const { partition } = require \prelude-ls
 const { color } = require \console-log-colors
 const { red, redBright, yellow, green, greenBright, blue, white, cyan, grey, black } = color
 
@@ -50,7 +51,6 @@ const TYPE_INHERITS =
 # TODO: Move these to a common file (types.ls) and import to both
 # TODO: Use explicit Expr class for constructing the AST in ast.ls
 
-
 class Nothing
   promote: (parent) ->
     return this
@@ -93,6 +93,8 @@ class Block
     if not (@children instanceof Array)
       @children = [ @children ]
 
+    @attrs = []
+
   promote: (parent) ->
     if not TYPE_INHERITS[parent.type].includes @type
       error "Unwrapped block type '#{@type}' is not compatible with yielding scope type: '#{parent.type}'"
@@ -100,8 +102,13 @@ class Block
 
     new Block parent.type, parent.reach, @children
 
+  set-attr: (attr) ->
+    if not (attr instanceof Attr)
+      return console.error (red "Tried to set attribute of #{@type} with a not-Attr object"), attr
+    @attrs.push attr
+
   toString: (d = 0) ->
-    head = "#{blue @reach} #{white "<#{@type}"}"
+    head = blue "<#{@type}"
     pad = "  " * d
 
     stringify = ->
@@ -111,16 +118,18 @@ class Block
         it.toString(d+1)
       else if it instanceof Nothing
         it.toString(d+1)
-      else if it instanceof Attr
-        it.toString(d+1)
+      else if typeof it is \undefined
+        pad + "  " + red \??
       else
-        log it
-        pad + red "Don't know how to print #{@type}"
+        pad + "  " + red "?? Don't know how to print #{@type}"
 
+    # If there's only one child, put it on the same line
     if @children.0 instanceof Value and @children.length == 1
-      "#pad#head " + @children.0.toString! + "\n"
+      "#pad#head " + (@children.0.toString! + "\n") +
+        (@attrs.map (.toString(d + 1)) .join "\n")
     else
-      "#pad#head \n" + @children.map stringify .join "\n"
+      "#pad#head \n" +
+        ((@attrs.map (.toString(d + 1))) ++ (@children.map stringify)).join "\n"
 
   # TODO: Auto-promote
   # If a block has exactly one child, and the type of
@@ -130,64 +139,89 @@ class Block
 
 # Main
 
-run = (ast) ->
-  queue = []
-
-  each = (node, env = {}) ->
-    switch node.kind
+each = (expr, env) ->
+  yld = switch expr.kind
     | \scope =>
-      new Block node.type, \local,
-        node.body
+      new Block expr.type, \local,
+        expr.body
           .map    -> each it, env
           .filter -> not (it instanceof Nothing)  # Remove Expr`s that dont yield Blocks
 
       # TODO: Detect yielded Attrs and apply them to this instance
 
     | \literal =>
-      new Value node.type, \local, node.main
+      new Value expr.type, \local, expr.main
 
     | \atom =>
-      new Value \symbol, node.name
+      new Value \symbol, expr.name
 
     | \attr =>
-      new Attr node.name, node.args.map -> each it, env
+      new Attr expr.name, expr.args.map -> each it, env
 
     | \decl =>
-      env[node.name] = each node.main, env
+      env[expr.name] = each expr.main, env
+      new Nothing
+
+    | \assign =>
+      env[expr.name] = each expr.main, env
       new Nothing
 
     | \ident =>
-      env[node.name] or new Nothing
+      env[expr.name] or new Nothing
 
     | \yield =>
-      each node.main, env
+      each expr.main, env
+
+    | \timing =>
+      switch expr.freq
+      | \forever =>
+          set-immediate ->
+            log \DEFERRED-SCOPE, env
+            #each expr.main, env
+          each expr.main, env
+      | _ =>
+        warn "Unsupported timing frequency: '#{expr.freq}'"
 
     | \binary =>
-      left  = each node.left, env
-      right = each node.right, env
+      left  = each expr.left, env
+      right = each expr.right, env
 
       assert left  instanceof Value
       assert right instanceof Value
-      assert left.type,  ACCEPTED_TYPES[node.oper]
-      assert right.type, ACCEPTED_TYPES[node.oper]
+      assert left.type,  ACCEPTED_TYPES[expr.oper]
+      assert right.type, ACCEPTED_TYPES[expr.oper]
 
-      new Value node.type, \local,
-        switch node.oper
-        | \+ => left.value + right.value
-        | \- => left.value - right.value
-        | \+ => left.value + right.value
-        | \/ => left.value / right.value
-        | \~ => left.value / right.value
+      new Value expr.type, \local,
+        switch expr.oper
+        | \+  => left.value + right.value
+        | \-  => left.value - right.value
+        | \*  => left.value * right.value
+        | \/  => left.value / right.value
+        | \:= => log (red \:=), left, right
         | _ =>
-          warn "Unsupport operator: '#{node.oper}'"
+          warn "Unsupport operator: '#{expr.oper}'"
           new Nothing
 
     | _ =>
-      warn "Can't handle this expr kind: '#{node.kind}'"
+      warn "Can't handle this kind of Expr: '#{expr.kind}'"
       new Nothing
 
 
-  return each ast
+  # Apply any yielded attrs to the current block
+
+  if yld instanceof Block
+    [ attrs, others ] = partition (instanceof Attr), yld.children
+    log attrs.length, others.length
+    attrs.map -> yld.set-attr it
+    yld.children = others
+
+  return yld
+
+
+run = (ast) ->
+  queue = []
+
+  return each ast, {}
 
 
 
@@ -200,12 +234,13 @@ program = examples.example
 render = (.toString!)
 
 log ""
-log "\n--- SOURCE  ---\n"
+log "\n--- SRC ---\n"
 log grey program.src
-log "\n--- AST     ---\n"
+log "\n--- AST ---\n"
 log program.body
-log "\n--- COMPUTE ---\n"
-log out = run program
-log "\n--- RESULT  ---\n"
+log "\n--- RUN ---\n"
+#log out = run program
+out = run program
+log "\n--- TREE --\n"
 log render out
 

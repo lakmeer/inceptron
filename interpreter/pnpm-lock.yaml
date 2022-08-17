@@ -2,13 +2,20 @@ lockfileVersion: 5.3
 
 specifiers:
   console-log-colors: ^0.2.3
+  prelude-ls: ^1.2.1
 
 dependencies:
   console-log-colors: 0.2.3
+  prelude-ls: 1.2.1
 
 packages:
 
   /console-log-colors/0.2.3:
     resolution: {integrity: sha512-KAGsePEunvs575RFAIThR7sUBVuqXU0Y2tckA99k25itVAOa0hPwf3HkNVyQ7XnbisKvTp/gLnByjG9NTYt3hw==}
     engines: {node: '>= 4.1.0'}
+    dev: false
+
+  /prelude-ls/1.2.1:
+    resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
+    engines: {node: '>= 0.8.0'}
     dev: false
