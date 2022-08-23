@@ -15,7 +15,9 @@ export const pad      = (str) -> (" " * (3 - String(str).length)) + String(str)
 export const any      = -> it.reduce (or), false
 export const all      = -> it.reduce (and), true
 export const limit    = (a, b, n) -> if n < a then a else if n > b then b else n
+export const head     = -> if it.length then it[0] else null
+export const select   = (it, ƒ) -> head it.filter ƒ
 
-export const header     = -> log "--- #itr ---"
-export const big-header = -> log "\n--- #it ---\n"
+export const header     = -> log "--- #it ---\n"
+export const big-header = -> log "\n=== #it ===\n"
 

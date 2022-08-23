@@ -9,13 +9,39 @@ const treediff = require \./treediff
 
 # Re-export
 
-const { log, nop, header, big-header, readfile, undef, def, join, defer, pad, any, all, limit } = helpers
+const { log, nop, select, header, big-header, readfile, undef, def, join, defer, pad, any, all, limit } = helpers
 
 export dump
 export colors
 export treediff
-export log, nop, header, big-header, readfile, undef, def, join, defer, pad, any, all, limit
+export log, nop, select, header, big-header, readfile, undef, def, join, defer, pad, any, all, limit
 
+
+# TimeVal - turns HMS values into milliseconds
+
+export const time-val = ({ h = 0, m = 0, s = 0, ms = 0 }) ->
+  h * 60 * 60 * 1000 + m * 60 * 1000 + s * 1000 + ms
+
+export const parse-time = (time) ->
+  cursor = 0
+  res = {}
+  val = ""
+
+  while cursor < time.length
+    char = time[cursor]
+
+    if char.match /\d/
+      val += char
+    else
+      if char is \m and time[cursor + 1] is \s
+        res[ \ms ] = parse-int val
+        cursor := cursor + 1
+      else
+        res[ char ] = parse-int val
+      val := ""
+    cursor := cursor + 1
+
+  return time-val res
 
 
 # Traverse-Assert - recursively compare two nested ASTs

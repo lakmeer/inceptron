@@ -24,14 +24,17 @@ export const dump = (thing, opt = { color: off }, d = 0) ->
   switch typeof! thing
   | \Object =>
     if Object.keys(thing).length is 0 then return "{}"
+    i = d
     for key, val of thing
-      str += "\n#pad#{_key key}: #{ dump val, opt, d + 1 }"
+      if i++ then str += \\n
+      str += "#pad#{_key key}: #{ dump val, opt, d + 1 }"
     return str
 
   | \Array =>
     if thing.length is 0 then return "[]"
     for key, val of thing
-      str += "\n#pad#{_key "[#key]"} #{ dump val, opt, d + 1 }"
+      if key + d then str += \\n
+      str += "#pad#{_key "[#key]"} #{ dump val, opt, d + 1 }"
     return str
 
   | \Null      => return _nul "null"
