@@ -1,7 +1,7 @@
 
 # Helpers
 
-{ log, header, big-header, dump, colors, treediff } = require \./utils
+{ log, any, limit, header, big-header, dump, colors, treediff } = require \./utils
 { treediff, any-diffs } = treediff
 { color, bright, grey, red, yellow, green, blue, magenta, white } = colors
 
@@ -28,6 +28,8 @@ TOKEN_MATCHERS =
   [ \RANGE,       /^\blocal\b/ ]
 
   # Primitive Literals
+  [ \ATTR,        /^:[\w]+/ ]
+  [ \SUBATTR,     /^::[\w]+/ ]
   [ \INTLIKE,     /^[\d]+/ ]
   [ \STRING,      /^"[^"]*"/ ]
   [ \STRCOM,      /^"[^"\n]*$/ ]
@@ -66,10 +68,16 @@ const parse = (source) ->
   # Debug logger
 
   steps  = []
-  bump   = (c, type) -> steps.push [ \BUMP,  "#{grey type} #{white c}" ]
+  bump   = (c, type) -> steps.push [ \BUMP, "#{lookahead.type} #{white c}" ]
   debug  = (...args) -> steps.push [ \DEBUG, clean-src args.join ' ' ]
   error  = (...args) -> steps.push [ \ERROR, clean-src args.join ' ' ]
   status = -> steps.push [ lookahead, ((yellow clean-src lookahead.value) + clean-src source.slice cursor), peek! ]
+
+  wrap = (name, ƒ) -> (...args) ->
+    bump blue \+ + name
+    result = ƒ ...args
+    bump grey \- + name
+    return result
 
 
   # Tokeniser
@@ -86,9 +94,6 @@ const parse = (source) ->
 
     token = lookahead
 
-    if token is null or token.type is \EOF
-      error "Unexpected end of input (expected #type)"
-
     if token.type isnt type
       error "Unexpected token (expected '#type', got #{token.type})"
 
@@ -96,6 +101,9 @@ const parse = (source) ->
     return token.value
 
   peek = ->
+    if cursor >= source.length
+      return [ \EOF, "" ]
+
     char = source[ cursor ]
     rest = source.slice cursor
 
@@ -103,13 +111,14 @@ const parse = (source) ->
       if token = match-rx rx, rest
         return [ type, token ]
 
-    error "Unexpected token: `#char`"
+    if !char
+      error "Char token was '#{typeof! char}' at #{cursor}", source.slice cursor
+    else
+      error "Unexpected token: `#char`"
+
     return [ \UNKNOWN, char ]
 
   next = ->
-    if cursor >= source.length
-      return Token \EOF, ""
-
     [ type, token ] = peek!
     cursor := cursor + token.length
 
@@ -144,21 +153,18 @@ const parse = (source) ->
 
   # Parser Nodes
 
-  Root = ->
-    bump \Root, lookahead.type
+  Root = wrap \Root ->
     kind: \scope
     type: \Root
     body: Body!
 
-  Body = ->
-    bump \Body, lookahead.type
+  Body = wrap \Body ->
     list = [ Statement! ]
-    while lookahead.type isnt \EOF
+    while lookahead.type isnt \EOF and lookahead.type isnt \SCOPE_END
       list.push Statement!
     return list
 
-  Scope = ->
-    bump \Scope, lookahead.type
+  Scope = wrap \Scope ->
     eat \SCOPE_BEG
     body =
       switch lookahead.type
@@ -168,32 +174,33 @@ const parse = (source) ->
     type: \???
     body: body
 
-  # Statement
+  # Statements
 
-  Statement = ->
-    bump \Statement, lookahead.type
-    switch lookahead.type
+  Statement = wrap \Statement ->
+    ret = switch lookahead.type
     | \;         => EmptyStatement!
     | \IF        => IfStatement!
+    | \ATTR      => AttrStatement!
     | \RANGE     => DeclarationStatement!
     | \SCOPE_BEG => Scope!
     | _          => ExpressionStatement!
+    return ret
 
-  EmptyStatement = -> null
+  EmptyStatement = wrap \EmptyStatement -> null
 
-  ExpressionStatement = ->
-    bump \ExpressionStatement, lookahead.type
+  ExpressionStatement = wrap \ExpressionStatement ->
     expr = PrimaryExpression!
     switch lookahead.type
     | \NEWLINE   => eat \NEWLINE # This is a TDD prayer, could cause problems
-    | \EOF       => void
+    | \SCOPE_END => eat \SCOPE_END # This is a TDD prayer, could cause problems
+    | \EOF       => eat \EOF
+    | \;         => eat \;
     | _          => eat \;
     kind: \expr-stmt
     type: \???
     main: expr
 
-  DeclarationStatement = ->
-    bump \DeclarationStatement, lookahead.type
+  DeclarationStatement = wrap \DeclarationStatement ->
     range = eat \RANGE
     type  = eat \TYPE
     ident = Identifier!
@@ -205,34 +212,64 @@ const parse = (source) ->
     ident: ident
     value: PrimaryExpression!
 
-  IfStatement = ->
-    bump \IfStatement, lookahead.type
+  IfStatement = wrap \IfStatement ->
     eat \IF
     cond = BinaryExpression!
     pass = Scope!
     fail = null
     if lookahead.type is \SCOPE_BEG
       fail := Scope!
+    eat \SCOPE_END
     kind: \if
     cond: cond
     pass: pass
     fail: fail
 
-  VariableDeclaration = ->
-    bump \VariableDeclaration, lookahead.type
+  AttrStatement = wrap \AttrStatement ->
+    kind: \attr-stmt
+    type: \???
+    attr: Attribute!
+
+  VariableDeclaration = wrap \VariableDeclaration ->
     ident = Identifier!
     eat \OPER_ASS
     kind: \ident
     type: \???
     value: Expression!
 
-  # Expression
+  # Attributes
 
-  PrimaryExpression = ->
-    bump \PrimaryExpression, lookahead.type
+  Attribute = wrap \Attribute ->
+    name = (eat \ATTR).slice 1
+    args = ArgsList!
+    kind: \attr
+    name: name
+    args: args
+
+  SubAttribute = wrap \SubAttribute ->
+    name = (eat \SUBATTR).slice 2
+    kind: \sub-attr
+    name: name
+    value: PrimaryExpression!
+
+  ArgsList = wrap \ArgsList ->
+    args = [ AttrArgument! ]
+    while lookahead.type isnt \EOF
+      args.push AttrArgument!
+    return args
+
+  AttrArgument = wrap \AttrArgument ->
+    switch lookahead.type
+    | \SUBATTR => SubAttribute!
+    | _        => PrimaryExpression!
+
+  # Expressions
+
+  PrimaryExpression = wrap \PrimaryExpression ->
     return BinaryExpression! if is-literal lookahead.type
     switch lookahead.type
     | \PAREN_OPEN => ParenExpression!
+    | \SUBATTR    => SubAttr!
     | \IDENT      =>
       left = Identifier!
       switch lookahead.type
@@ -240,8 +277,7 @@ const parse = (source) ->
       | _         => PartialBinaryExpression left
     | _           => BinaryExpression!
 
-  Expression = ->
-    bump \Expression, lookahead.type
+  Expression = wrap \Expression ->
     switch lookahead.type
     | \IDENT      => AssignmentExpression!
     | \INTLIKE    => BinaryExpression!
@@ -249,18 +285,16 @@ const parse = (source) ->
     | \PAREN_OPEN => ParenExpression!
     | _           => debug "No expression for type #that"
 
-  ParenExpression = ->
-    bump \ParenExpression, lookahead.type
+  ParenExpression = wrap \ParenExpression ->
     eat \PAREN_OPEN
     expr = Expression!
     eat \PAREN_CLOSE
     return expr
 
-  BinaryExpression = ->
-    bump \BinaryExpression, lookahead.type
+  BinaryExpression = wrap \BinaryExpression ->
     PartialBinaryExpression Variable!
 
-  Variable = ->
+  Variable = wrap \Variable ->
     switch lookahead.type
     | \IDENT => Identifier!
     | _      => Literal!
@@ -283,8 +317,7 @@ const parse = (source) ->
 
     return node
 
-  AssignmentExpression = ->
-    bump \AssignmentExpression, lookahead.type
+  AssignmentExpression = wrap \AssignmentExpression ->
     PartialAssignmentExpression LeftHandSideExpression!
 
   PartialAssignmentExpression = (left) ->
@@ -299,35 +332,30 @@ const parse = (source) ->
     left:  check-valid-assign left
     right: right
 
-  LeftHandSideExpression = ->
-    bump \LeftHandSideExpression, lookahead.type
+  LeftHandSideExpression = wrap \LeftHandSideExpression ->
     Identifier!
 
   # Leaves
 
-  Literal = ->
-    bump \Literal, lookahead.type
+  Literal = wrap \Literal ->
     switch lookahead.type
     | \INTLIKE => NumericLiteral!
     | \STRING  => StringLiteral!
     | _        => null
 
-  NumericLiteral = ->
-    bump \NumericLiteral, lookahead.type
+  NumericLiteral = wrap \NumericLiteral ->
     if eat \INTLIKE
       kind: \literal
       type: \AutoInt
       value: parse-int that
 
-  StringLiteral = ->
-    bump \StringLiteral, lookahead.type
+  StringLiteral = wrap \StringLiteral ->
     if eat \STRING
       kind: \literal
       type: \AutoStr
       value: that.replace /^"/, '' .replace /"$/, ''
 
-  Identifier = ->
-    bump \Identifier, lookahead.type
+  Identifier = wrap \Identifier ->
     name = eat \IDENT
     kind: \ident
     name: name
@@ -348,6 +376,12 @@ const parse = (source) ->
 # Run Tests
 #
 
+# Helpers
+
+examples  = require \./test
+options   = Object.keys examples
+current   = options.length
+
 format-step = ([ token, src, peek ], ix) ->
   switch token
   | \ERROR => "#{red     \err} | " + bright src
@@ -356,46 +390,77 @@ format-step = ([ token, src, peek ], ix) ->
   | \BUMP  => "#{grey    \---} | " + grey src
   | _      => "#{green   \new} | #{bright token.type}(#{yellow clean-src token.value}) #{bright \<-} \"#src\""
 
-examples  = require \./test
-options   = Object.keys examples
-selection = options.18
-program   = examples[selection]
+
+# Test run function
+
+run-tests = (current) ->
+  selection = options[current]
+  program   = examples[selection]
+
+  console.clear!
+  big-header bright "RUNNING TEST CASES"
+
+  for name, program of examples
+    result = parse program.src
+    output = result.output
+    diff   = treediff program.ast, output
+    steps  = result.steps
+
+    inspecting = selection is name
+    any-errors = any steps.map ([ type ]) -> type is \ERROR
+    passed     = not diff.any and not any-errors
 
 
-# console.clear!
+    # Readout
 
+    if passed
+      big-header bright green name
 
-for let name, program of examples
-  result = parse program.src
-  output = result.output
-  diff   = treediff program.ast, output
+      if inspecting
+        log white program.src
+        big-header \Parser
+        log steps.map(format-step).join \\n
+        big-header \Output
+        log dump output, color: on
+        return log bright blue "\n... finished inspecting #name"
 
-  if not diff.any
-    if selection is name
-      big-header green name
-      log program.src
-      big-header \Parser
-      log result.steps.map(format-step).join \\n
-      # big-header \Output
-      # log dump output, color: on
     else
-      header green name
+      big-header bright red name
 
-  else
-    big-header red name
-    log white program.src
-    big-header \Parser
-    log result.steps.map(format-step).join \\n
-    log ""
-    log (color 1,41) "AST Mismatch"
-    #log diff.summary
-    big-header \Output
-    #log green dump program.ast.body
-    #log red dump output.body
-    log ""
-    throw red "\nTest '#name' Failed"
+      for step in steps when step.0 is \ERROR
+        log format-step step
 
-  if selection is name
-    log "\n"
-    throw yellow "\nInspection Complete"
+      if inspecting
+        log white program.src
+        big-header \Parser
+        log result.steps.map(format-step).join \\n
+        big-header \Output
+        log (color 1,41) "AST Mismatch"
+        log ""
+        log diff.summary
+        green dump program.ast.body
+        red dump output.body
+        log ""
+        return log bright red "\nTest '#name' Failed"
+
+
+# Begin
+
+stdin = process.stdin
+
+stdin.setRawMode on .resume!
+stdin.setEncoding \utf8
+
+stdin.on \data, (key) ->
+  process.exit! if key is '\u0003'
+  str = key.toString!
+  prev = current
+  if str.length is 3
+    switch str.char-code-at 2
+    | 65 => current := limit 0, options.length, current - 1
+    | 66 => current := limit 0, options.length, current + 1
+  if prev isnt current
+    run-tests current
+
+run-tests current
 

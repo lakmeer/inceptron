@@ -1,7 +1,7 @@
 
 # Requires
 
-const dump     = require \./dump
+const { dump } = require \./dump
 const colors   = require \./colors
 const helpers  = require \./helpers
 const treediff = require \./treediff
@@ -9,12 +9,12 @@ const treediff = require \./treediff
 
 # Re-export
 
-const { log, nop, header, big-header, readfile, undef, def, join, defer, pad } = helpers
+const { log, nop, header, big-header, readfile, undef, def, join, defer, pad, any, all, limit } = helpers
 
 export dump
 export colors
 export treediff
-export log, nop, header, big-header, readfile, undef, def, join, defer, pad
+export log, nop, header, big-header, readfile, undef, def, join, defer, pad, any, all, limit
 
 
 

@@ -12,9 +12,9 @@ const { detailed-diff }  = require \./diff
 first-key = -> if def it then Object.keys(it).0
 
 any-diffs = (diff) ->
-  Object.keys(diff.added).length or
-  Object.keys(diff.deleted).length or
-  Object.keys(diff.updated).length
+  !!Object.keys(diff.added).length or
+  !!Object.keys(diff.deleted).length or
+  !!Object.keys(diff.updated).length
 
 chain-get = (target, chain) ->
   for k in chain

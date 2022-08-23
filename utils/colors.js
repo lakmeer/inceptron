@@ -15,12 +15,12 @@ exports.WHITE   = WHITE   = 37;
 
 exports.color = color;
 
-exports.red     = color(BRIGHT, RED)
-exports.green   = color(BRIGHT, GREEN)
-exports.yellow  = color(BRIGHT, YELLOW)
-exports.blue    = color(BRIGHT, BLUE)
-exports.magenta = color(BRIGHT, MAGENTA)
-exports.cyan    = color(BRIGHT, CYAN)
+exports.red     = color(RED)
+exports.green   = color(GREEN)
+exports.yellow  = color(YELLOW)
+exports.blue    = color(BLUE)
+exports.magenta = color(MAGENTA)
+exports.cyan    = color(CYAN)
 exports.white   = color(WHITE)
 exports.grey    = color(BRIGHT, BLACK)
 

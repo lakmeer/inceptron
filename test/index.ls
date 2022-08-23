@@ -3,6 +3,16 @@
 # AST Node Constructors
 #
 
+Root = (...body) ->
+  kind: \scope
+  type: \Root
+  body: body
+
+Scope = (...body) ->
+  kind: \scope
+  type: \???
+  body: body
+
 ExprStmt = ->
   kind: \expr-stmt
   type: \???
@@ -20,6 +30,21 @@ IfStmt = (cond, pass, fail) ->
   cond: cond
   pass: pass
   fail: fail
+
+Attr = (name, ...args) ->
+  kind: \attr
+  name: name
+  args: args
+
+SubAttr = (name, value) ->
+  kind: \sub-attr
+  name: name
+  value: value
+
+AttrStmt = ->
+  kind: \attr-stmt
+  type: \???
+  attr: it
 
 AutoInt = ->
   kind: \literal
@@ -49,16 +74,6 @@ Assign = (left, right) ->
   left: left
   right: right
 
-Scope = (...body) ->
-  kind: \scope
-  type: \???
-  body: body
-
-Root = (...body) ->
-  kind: \scope
-  type: \Root
-  body: body
-
 
 #
 # Test Cases
@@ -82,6 +97,21 @@ export StringCommentNewline =
 
   """
   ast: Root ExprStmt AutoStr " I'm like a comment"
+
+export Attribute =
+  src: ":attribute 3"
+  ast: Root AttrStmt Attr \attribute, (AutoInt 3)
+
+export AttributeMulti =
+  src: ":padding 3 4 5"
+  ast: Root AttrStmt Attr \padding, (AutoInt 3), (AutoInt 4), (AutoInt 5)
+
+export AttributeNamedArgs =
+  src: ":padding ::top 3 ::bottom 4 ::vert 5"
+  ast: Root AttrStmt Attr \padding,
+    SubAttr \top,    (AutoInt 3)
+    SubAttr \bottom, (AutoInt 4)
+    SubAttr \vert,   (AutoInt 5)
 
 export Whitespace =
   src: "  \n    34"
