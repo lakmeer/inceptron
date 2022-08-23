@@ -1,6 +1,0 @@
-{
-	"dependencies": {
-		"console-log-colors": "^0.2.3",
-		"prelude-ls": "^1.2.1"
-	}
-}

@@ -1,9 +1,8 @@
 
 # Imports
 
-const { partition } = require \prelude-ls
-const { color } = require \console-log-colors
-const { red, redBright, yellow, green, greenBright, blue, white, cyan, grey, black } = color
+const { colors } = require \./utils
+const { red, blue, yellow, green, grey } = colors
 
 
 # Helpers
@@ -86,6 +85,7 @@ class Value
     | \string  => pad + head + green \" + @value.trim() + \"
     | \number  => pad + head + yellow @value
     | \boolean => pad + head + if @value then (greenBright "?TRUE") else (redBright "?FALSE")
+
 
 
 class Block
@@ -239,17 +239,21 @@ run = (ast) ->
 
 # Start
 
-examples = require \./ast
+console.clear!
 
-program = examples.forever
+examples = require \./test
+
+options   = Object.keys examples
+selection = options.0
+program   = examples[selection]
 
 render = (.toString!)
 
 log ""
-log "\n--- SRC ---\n"
+log "\n--- #selection ---\n"
 log grey program.src
 log "\n--- AST ---\n"
-log program.body
+log program.ast.body
 log "\n--- RUN ---\n"
 #log out = run program
 out = run program
