@@ -1,4 +1,7 @@
 
+const { log, parse-time, time-val } = require \../utils
+
+
 #
 # AST Node Constructors
 #
@@ -25,11 +28,44 @@ DeclStmt = (range, type, ident, value) ->
   ident: ident
   value: value
 
-IfStmt = (cond, pass, fail) ->
+IfStmt = (cond, pass, fail = null) ->
   kind: \if
   cond: cond
   pass: pass
   fail: fail
+
+RepeatStmt = (count, main) ->
+  kind: \repeat
+  count: count
+  main: main
+
+OverStmt = (span, ease, main) ->
+  kind: \time
+  type: \over
+  span: span
+  ease: ease
+  main: main
+
+Yield = (main) ->
+  kind: \yield
+  main: main
+
+TreeNode = (type, ...args) ->
+  main = []
+
+  if args.length and args[*-1].kind isnt \treeprop
+    main := args.pop!
+
+  kind: \treenode
+  type: type
+  args: args
+  main: main
+
+TreeProp = (name, value) ->
+  kind: \treeprop
+  type: value.type
+  name: name
+  value: value
 
 Attr = (name, ...args) ->
   kind: \attr
@@ -55,6 +91,11 @@ AutoStr = ->
   kind: \literal
   type: \AutoStr
   value: it
+
+AutoTime = ->
+  kind: \literal
+  type: \AutoTime
+  value: if typeof! it is \String then parse-time it else it
 
 Binary = (oper, type, left, right) ->
   kind: \binary
@@ -201,7 +242,6 @@ export BinaryVarBool =
   src: "x == 2"
   ast: Root ExprStmt Binary \==, \AutoBool, (Ident \x), (AutoInt 2)
 
-
 export IfSimple =
   src: """
   if x == 69 {
@@ -212,17 +252,89 @@ export IfSimple =
     Binary \==, \AutoBool,
       Ident \x
       AutoInt 69
-    Scope
-      ExprStmt Assign (Ident \x), (AutoInt 69)
+    Scope do
+      ExprStmt Assign (Ident \x), (AutoInt 42)
 
+export IfElse =
+  src: """
+  if x == 69 {
+    x := 42
+  } else {
+    x := 420
+  }
+  """
+  ast: Root IfStmt do
+        Binary \==, \AutoBool, (Ident \x), (AutoInt 69)
+        Scope ExprStmt Assign (Ident \x), (AutoInt 42)
+        Scope ExprStmt Assign (Ident \x), (AutoInt 420)
+
+export LogicalKeywordsAnd =
+  src: """x and y"""
+  ast: Root ExprStmt Binary \and, \AutoBool, (Ident \x), (Ident \y)
+
+export LogicalKeywordsOr =
+  src: """x or y"""
+  ast: Root ExprStmt Binary \or, \AutoBool, (Ident \x), (Ident \y)
+
+export Times =
+  src: """times 4 { x := x + 1 }"""
+  ast:
+    Root RepeatStmt (AutoInt 4),
+      Scope ExprStmt Assign (Ident \x),
+        Binary \+, \AutoNum, (Ident \x), (AutoInt 1)
+
+export TimeUnits =
+  src: "1s;2s;3m;4h1m;4h1m0ms;3h20s;500ms;"
+  ast:
+    Root do
+      ExprStmt AutoTime time-val s: 1
+      ExprStmt AutoTime time-val s: 2
+      ExprStmt AutoTime time-val m: 3
+      ExprStmt AutoTime time-val h: 4, m: 1
+      ExprStmt AutoTime time-val h: 4, m: 1, ms: 0
+      ExprStmt AutoTime time-val s: 20, h: 3
+      ExprStmt AutoTime time-val ms: 500
+
+export Over =
+  src: """over 2s { x := 5 }"""
+  ast:
+    Root OverStmt (AutoTime \2s), null,
+      Scope ExprStmt Assign (Ident \x), (AutoInt 5)
+
+export OverEasy =
+  src: """over 2s ease sq { x := 5 }"""
+  ast:
+    Root OverStmt (AutoTime \2s), (Ident \sq),
+      Scope ExprStmt Assign (Ident \x), (AutoInt 5)
+
+export YieldKeyword =
+  src: "yield 4"
+  ast:
+    Root Yield AutoInt 4
+
+export TreeConstructor =
+  src: "<None"
+  ast:
+    Root TreeNode \None
+
+export TreeProps =
+  src: "<Box x=2 y=3"
+  ast:
+    Root TreeNode \Box,
+      (TreeProp \x, AutoInt 2)
+      (TreeProp \y, AutoInt 3)
+
+
+# Waiting on operator precedence:
 
 /*
+
 export OperatorPrecedence =
   src: """
   2 + 3 * 4 - 1;
   """
   ast:
-    Program do
+    Root do
       ExprStmt do
           Binary \+ \AutoInt,
             AutoInt 2
@@ -231,5 +343,18 @@ export OperatorPrecedence =
                 AutoInt 3
                 AutoInt 4
               AutoInt 1
+
+export ComparitorsGreater =
+  src: "x > 0 and y >= 0"
+  ast: Root ExprStmt Binary \and, \AutoBool,
+        Binary \>,  \AutoBool, (Ident \x), AutoInt 0
+        Binary \>=, \AutoBool, (Ident \y), AutoInt 0
+
+export ComparitorsLesser =
+  src: "x < 0 or y <= 0"
+  ast: Root ExprStmt Binary \or, \AutoBool,
+        Binary \<,  \AutoBool, (Ident \x), AutoInt 0
+        Binary \<=, \AutoBool, (Ident \y), AutoInt 0
+
 */
 
