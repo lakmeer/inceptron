@@ -1,9 +1,9 @@
 
 # Helpers
 
-{ log, any, limit, header, big-header, dump, colors, treediff } = require \./utils
+{ log, parse-time, select, any, limit, header, big-header, dump, colors, treediff } = require \./utils
 { treediff, any-diffs } = treediff
-{ color, bright, grey, red, yellow, green, blue, magenta, white } = colors
+{ color, bright, grey, red, yellow, green, blue, magenta, white, plus, minus } = colors
 
 const clean-src = (txt = "") -> txt.replace /\n/g, bright blue \⏎
 
@@ -21,15 +21,27 @@ TOKEN_MATCHERS =
   [ \SCOPE_END,   /^}/ ]
   [ \PAREN_OPEN,  /^\(/ ]
   [ \PAREN_CLOSE, /^\)/ ]
-  [ \,,           /^,/ ]
+  [ \COMMA,       /^,/ ]
 
   # Keywords
-  [ \IF,          /^\bif\b/ ]
-  [ \RANGE,       /^\blocal\b/ ]
+  [ \IF,          /^if\b/ ]
+  [ \ELSE,        /^else\b/ ]
+  [ \RANGE,       /^local\b/ ]
+  [ \TRUE,        /^true\b/ ]
+  [ \FALSE,       /^false\b/ ]
+  [ \NULL,        /^null\b/ ]
+  [ \AND,         /^and\b/ ]
+  [ \OR,          /^or\b/ ]
+  [ \TIMES,       /^times\b/ ]
+  [ \OVER,        /^over\b/ ]
+  [ \EASE,        /^ease\b/ ]
+  [ \YIELD,       /^yield\b/ ]
 
-  # Primitive Literals
+  # Literals
+  [ \TIMELIKE,    /^([\d]+h)?([\d]+m)?([\d]+s)?([\d]+ms)?\b/ ]
   [ \ATTR,        /^:[\w]+/ ]
   [ \SUBATTR,     /^::[\w]+/ ]
+  [ \TREENODE,    /^<[\w]+\b/ ]
   [ \INTLIKE,     /^[\d]+/ ]
   [ \STRING,      /^"[^"]*"/ ]
   [ \STRCOM,      /^"[^"\n]*$/ ]
@@ -43,6 +55,10 @@ TOKEN_MATCHERS =
   [ \OPER_ASS,    /^:=/ ]
   [ \OPER_EQUIV,  /^==/ ]
   [ \OPER_EQ,     /^=/ ]
+  [ \OPER_GTE,    /^<=/ ]
+  [ \OPER_GT,     /^</ ]
+  [ \OPER_LTE,    /^>=/ ]
+  [ \OPER_LT,     /^>/ ]
 
   # Identifiers
   [ \TYPE,        /^[A-Z]\w+/ ]
@@ -114,7 +130,7 @@ const parse = (source) ->
     if !char
       error "Char token was '#{typeof! char}' at #{cursor}", source.slice cursor
     else
-      error "Unexpected token: `#char`"
+      throw error "Unexpected token: `#char`"
 
     return [ \UNKNOWN, char ]
 
@@ -145,10 +161,11 @@ const parse = (source) ->
 
   one-of = (types) -> -> types.includes it
 
-  is-bin-op  = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV OPER_EQUIV ]>
+  is-bool-op = one-of <[ OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE AND OR ]>
   is-math-op = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV ]>
   is-literal = one-of <[ INTLIKE STRING ]>
   is-range   = one-of <[ local share uniq lift ]>
+  is-bin-op  = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE AND OR ]>
 
 
   # Parser Nodes
@@ -159,7 +176,9 @@ const parse = (source) ->
     body: Body!
 
   Body = wrap \Body ->
-    list = [ Statement! ]
+    if lookahead.type is \NEWLINE # TODO: Find out how to kill this
+      eat \NEWLINE
+    list = [ ]
     while lookahead.type isnt \EOF and lookahead.type isnt \SCOPE_END
       list.push Statement!
     return list
@@ -170,6 +189,8 @@ const parse = (source) ->
       switch lookahead.type
       | \SCOPE_END => eat \SCOPE_END; []
       | _          => Body!
+    if lookahead.type is \SCOPE_END
+      eat \SCOPE_END
     kind: \scope
     type: \???
     body: body
@@ -177,14 +198,17 @@ const parse = (source) ->
   # Statements
 
   Statement = wrap \Statement ->
-    ret = switch lookahead.type
+    switch lookahead.type
     | \;         => EmptyStatement!
     | \IF        => IfStatement!
     | \ATTR      => AttrStatement!
     | \RANGE     => DeclarationStatement!
+    | \TIMES     => RepeatStatement!
+    | \OVER      => TimeStatement!
+    | \YIELD     => Yield!
+    | \TREENODE  => TreeNode!
     | \SCOPE_BEG => Scope!
     | _          => ExpressionStatement!
-    return ret
 
   EmptyStatement = wrap \EmptyStatement -> null
 
@@ -216,32 +240,83 @@ const parse = (source) ->
     eat \IF
     cond = BinaryExpression!
     pass = Scope!
+
     fail = null
-    if lookahead.type is \SCOPE_BEG
-      fail := Scope!
-    eat \SCOPE_END
+
+    if lookahead.type is \NEWLINE
+      eat \NEWLINE
+    if lookahead.type is \ELSE
+      eat \ELSE
+      if lookahead.type is \SCOPE_BEG
+        fail := Scope!
+      else
+        fail := BinaryExpression!
+
     kind: \if
     cond: cond
     pass: pass
     fail: fail
+
+  RepeatStatement = wrap \RepeatStatement ->
+    eat \TIMES
+    kind: \repeat
+    count: PrimaryExpression!
+    main: Scope!
+
+  TimeStatement = wrap \TimeStatement ->
+    eat \OVER
+    kind: \time
+    type: \over
+    span: TimeLiteral!
+    ease:
+      if lookahead.type is \EASE
+        eat \EASE
+        PrimaryExpression!
+      else
+        null
+    main: Scope!
 
   AttrStatement = wrap \AttrStatement ->
     kind: \attr-stmt
     type: \???
     attr: Attribute!
 
-  VariableDeclaration = wrap \VariableDeclaration ->
-    ident = Identifier!
-    eat \OPER_ASS
-    kind: \ident
-    type: \???
-    value: Expression!
+  Yield = wrap \Yield ->
+    eat \YIELD
+    kind: \yield
+    main: PrimaryExpression!
+
+  # TreeNodes
+
+  TreeNode = wrap \TreeNode ->
+    type = eat \TREENODE .slice 1
+    args = if lookahead.type is \IDENT then TreePropList! else []
+    kind: \treenode
+    type: type
+    args: args
+    main: Body!
+
+  TreeProperty = wrap \TreeProperty ->
+    name = eat \IDENT
+    eat \OPER_EQ
+    value = PrimaryExpression!
+    kind: \treeprop
+    type: value.type
+    name: name
+    value: value
+
+  TreePropList = wrap \TreeArgsList ->
+    args = [ TreeProperty! ]
+    while lookahead.type is \IDENT
+      args.push TreeProperty!
+    return args
+
 
   # Attributes
 
   Attribute = wrap \Attribute ->
     name = (eat \ATTR).slice 1
-    args = ArgsList!
+    args = AttrArgsList!
     kind: \attr
     name: name
     args: args
@@ -252,7 +327,7 @@ const parse = (source) ->
     name: name
     value: PrimaryExpression!
 
-  ArgsList = wrap \ArgsList ->
+  AttrArgsList = wrap \AttrArgsList ->
     args = [ AttrArgument! ]
     while lookahead.type isnt \EOF
       args.push AttrArgument!
@@ -266,10 +341,8 @@ const parse = (source) ->
   # Expressions
 
   PrimaryExpression = wrap \PrimaryExpression ->
-    return BinaryExpression! if is-literal lookahead.type
     switch lookahead.type
     | \PAREN_OPEN => ParenExpression!
-    | \SUBATTR    => SubAttr!
     | \IDENT      =>
       left = Identifier!
       switch lookahead.type
@@ -294,11 +367,6 @@ const parse = (source) ->
   BinaryExpression = wrap \BinaryExpression ->
     PartialBinaryExpression Variable!
 
-  Variable = wrap \Variable ->
-    switch lookahead.type
-    | \IDENT => Identifier!
-    | _      => Literal!
-
   PartialBinaryExpression = (node) ->
     while is-bin-op lookahead.type
       oper = lookahead.type
@@ -310,7 +378,7 @@ const parse = (source) ->
         left: node
         right: PrimaryExpression!
 
-      if oper is \OPER_EQUIV
+      if is-bool-op oper
         node.type = \AutoBool
       else if node.left.type is node.right.type
         node.type = node.left.type
@@ -337,11 +405,23 @@ const parse = (source) ->
 
   # Leaves
 
+  Variable = wrap \Variable ->
+    switch lookahead.type
+    | \IDENT => Identifier!
+    | _      => Literal!
+
   Literal = wrap \Literal ->
     switch lookahead.type
-    | \INTLIKE => NumericLiteral!
-    | \STRING  => StringLiteral!
-    | _        => null
+    | \TIMELIKE => TimeLiteral!
+    | \INTLIKE  => NumericLiteral!
+    | \STRING   => StringLiteral!
+    | _         => null
+
+  TimeLiteral = wrap \TimeLiteral ->
+    if eat \TIMELIKE
+      kind: \literal
+      type: \AutoTime
+      value: parse-time that
 
   NumericLiteral = wrap \NumericLiteral ->
     if eat \INTLIKE
@@ -378,9 +458,9 @@ const parse = (source) ->
 
 # Helpers
 
+current   = 0
 examples  = require \./test
 options   = Object.keys examples
-current   = options.length
 
 format-step = ([ token, src, peek ], ix) ->
   switch token
@@ -394,10 +474,11 @@ format-step = ([ token, src, peek ], ix) ->
 # Test run function
 
 run-tests = (current) ->
+  summary   = grey "-"
   selection = options[current]
   program   = examples[selection]
 
-  console.clear!
+  log "\n\n\n"
   big-header bright "RUNNING TEST CASES"
 
   for name, program of examples
@@ -414,39 +495,62 @@ run-tests = (current) ->
     # Readout
 
     if passed
-      big-header bright green name
-
-      if inspecting
-        log white program.src
-        big-header \Parser
-        log steps.map(format-step).join \\n
-        big-header \Output
-        log dump output, color: on
-        return log bright blue "\n... finished inspecting #name"
-
+      big-header plus name
+      summary += "#{plus  \+}#{grey \-}"
     else
-      big-header bright red name
+      big-header minus name
+      summary += "#{minus \-}#{grey \-}"
 
+    if not inspecting
       for step in steps when step.0 is \ERROR
         log format-step step
 
-      if inspecting
-        log white program.src
-        big-header \Parser
-        log result.steps.map(format-step).join \\n
-        big-header \Output
+    else
+      log white program.src
+      log ""
+
+      if any-errors
+        log (color 1,41) "Parser errors"
+        log ""
+      else if diff.any
         log (color 1,41) "AST Mismatch"
         log ""
+
+      switch mode
+      | COMPACT =>
+        header \Output
+        log dump output, color: on
+      | PARSER =>
+        header \Parser
+        for step in steps when step.0 isnt \BUMP
+          log format-step step
+      | PARSER_ALL =>
+        header \ParserWithBumps
+        for step in steps
+          log format-step step
+      | DIFF =>
+        header \Diff
         log diff.summary
-        green dump program.ast.body
-        red dump output.body
+      | DIFF_FULL =>
+        header \FullDiff
+        log white \Expected:
+        log green dump program.ast.body
         log ""
-        return log bright red "\nTest '#name' Failed"
+        log white \Actual:
+        log red dump output.body
+
+      return \\n + summary
 
 
 # Begin
 
+modes = [ NONE, COMPACT, PARSER, PARSER_ALL, DIFF, DIFF_FULL ] = [ 0, 1, 2, 3, 4, 5 ]
+
+mode = PARSER
+
 stdin = process.stdin
+
+[ UP, DOWN, RIGHT, LEFT ] = [ 65, 66, 67, 68 ]
 
 stdin.setRawMode on .resume!
 stdin.setEncoding \utf8
@@ -454,13 +558,24 @@ stdin.setEncoding \utf8
 stdin.on \data, (key) ->
   process.exit! if key is '\u0003'
   str = key.toString!
-  prev = current
   if str.length is 3
     switch str.char-code-at 2
-    | 65 => current := limit 0, options.length, current - 1
-    | 66 => current := limit 0, options.length, current + 1
-  if prev isnt current
-    run-tests current
+    | UP    => current := limit 0, options.length - 1, current - 1
+    | DOWN  => current := limit 0, options.length - 1, current + 1
+    | LEFT  => mode    := limit 0, modes.length - 1, mode - 1
+    | RIGHT => mode    := limit 0, modes.length - 1, mode + 1
+  log run-tests current
 
-run-tests current
 
+# Timelike Regex Tests
+
+# const { time-tests } = require \./test/time
+# [ _, rx ] = select TOKEN_MATCHERS, ([ type ]) -> type is \TIMELIKE
+# time-tests rx
+
+
+# Selection
+
+mode := DIFF
+current := options.length - 1
+log run-tests current
