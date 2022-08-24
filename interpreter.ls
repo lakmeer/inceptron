@@ -1,16 +1,14 @@
 
 # Imports
 
-const { colors } = require \./utils
-const { red, blue, yellow, green, grey } = colors
+const { log, header, colors, dump } = require \./utils
+const { plus, minus, bright, red, yellow, green, blue, white, cyan, grey, black } = colors
 
 
 # Helpers
 
-log   = (...args) -> console~log ...args; args.0
-last  = (xs) -> if xs.length then xs[*-1] else null
-error = log << red
-warn  = log << yellow
+last   = (xs) -> if xs.length then xs[*-1] else null
+warn   = -> yellow it
 
 assert = (a, b = true) ->
   if b instanceof Array and not b.includes a
@@ -44,7 +42,6 @@ const TYPE_INHERITS =
 
 # Expr represents a live scope
 
-
 # Block captures an expired scope
 
 # TODO: Move these to a common file (types.ls) and import to both
@@ -58,6 +55,8 @@ class Nothing
     pad = "  " * d
     pad + grey "<Nothing>"
 
+  unwrap: ->
+    null
 
 class Attr
   (@name, @args) ->
@@ -70,6 +69,8 @@ class Attr
     # TOOD: use @type instead
     pad + head + @args.map (.toString!)
 
+  unwrap: ->
+    @args.map (.unwrap!)
 
 class Value
   (@type, @reach, @value) ->
@@ -78,14 +79,15 @@ class Value
 
   toString: (d = 0) ->
     pad = "  " * d
-    head = grey "<#{@type} "
+    head = white "<#{@type} "
 
     # TOOD: use @type instead
     switch typeof @value
-    | \string  => pad + head + green \" + @value.trim() + \"
+    | \string  => pad + head + bright green \" + @value.trim() + \"
     | \number  => pad + head + yellow @value
-    | \boolean => pad + head + if @value then (greenBright "?TRUE") else (redBright "?FALSE")
+    | \boolean => pad + head + if @value then (plus "?TRUE") else (minus "?FALSE")
 
+  unwrap: -> @value
 
 
 class Block
@@ -106,6 +108,9 @@ class Block
     if not (attr instanceof Attr)
       return console.error (red "Tried to set attribute of #{@type} with a not-Attr object"), attr
     @attrs.push attr
+
+  unwrap: ->
+    last @children .unwrap!
 
   toString: (d = 0) ->
     head = blue "<#{@type}"
@@ -231,42 +236,40 @@ each = (expr, env) ->
 
 
 #
-# Interpreter
+# Test Runner
 #
 
-module.exports =
+run-and-test = (selection) ->
+  program = tests[selection]
 
-  # Set up a new environment
-  prime: (ast) ->
-    queue = []
-    return each ast, {}
+  header bright green selection
+  log bright program.src
+  log ""
 
-  # Run all tests
-  start: ->
-    console.clear!
-    examples = require \./test
+  #{ output, steps } = Parser.parse program.src
 
-    options   = Object.keys examples
-    selection = options.0
-    program   = examples[selection]
+  result = each program.ast
+  final = result.unwrap!
 
-    render = (.toString!)
+  log result.to-string!
+  log bright "Final Value:", yellow final
+  log ""
 
+  if final and final === program.val
+    header plus "#selection: Passed"
+  else
+    log bright red "Expected '#{program.val}' but got '#{final}'"
     log ""
-    log "\n--- #selection ---\n"
-    log grey program.src
-    log "\n--- AST ---\n"
-    log program.ast.body
-    log "\n--- RUN ---\n"
-    log out = run program
-    out = run program
-    log "\n--- TREE --\n"
-    log render out
+    header minus "#selection: Failed"
 
-  # Timelike Regex Tests
-  timelike: ->
-    const { time-tests } = require \./test/time
-    [ _, rx ] = select TOKEN_MATCHERS, ([ type ]) -> type is \TIMELIKE
-    time-tests rx
 
+#
+# Run Tests
+#
+
+tests = require \./test
+
+console.clear!
+
+run-and-test \SimpleProgram
 

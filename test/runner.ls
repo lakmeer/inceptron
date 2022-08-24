@@ -30,18 +30,22 @@ module.exports = Runner = do ->
   # Processing
 
   load = (suite, Parser) ->
+
     examples := suite
     options  := Object.keys suite
 
     results :=
       for name, program of examples
+        log \ok, name
         result = Parser.parse program.src
+
         name:   name
         diff:   treediff program.ast, result.output
         steps:  result.steps
         input:  program.ast
         output: result.output
 
+    log results
     render!
 
 
@@ -128,6 +132,7 @@ module.exports = Runner = do ->
 
   render-after = (ƒ) ->
     (...args) ->
+      log \rendering
       ƒ(...args)
       log render!
 

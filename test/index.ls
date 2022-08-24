@@ -47,7 +47,7 @@ OverStmt = (span, ease, main) ->
   main: main
 
 Yield = (main) ->
-  kind: \yiel
+  kind: \yield
   main: main
 
 TreeNode = (type, ...args) ->
@@ -120,16 +120,24 @@ Assign = (left, right) ->
 # Test Cases
 #
 
+export Degenerate =
+  src: ""
+  val: null
+  ast: Root []
+
 export JustNum =
   src: "69"
+  val: 69
   ast: Root ExprStmt AutoInt 69
 
 export JustString =
   src: "\"String\""
+  val: \String
   ast: Root ExprStmt AutoStr \String
 
 export StringCommentEOF =
   src: "\" I'm like a comment"
+  val: " I'm like a comment"
   ast: Root ExprStmt AutoStr " I'm like a comment"
 
 export StringCommentNewline =
@@ -137,6 +145,7 @@ export StringCommentNewline =
   " I'm like a comment
 
   """
+  val: " I'm like a comment"
   ast: Root ExprStmt AutoStr " I'm like a comment"
 
 export Attribute =
@@ -156,18 +165,22 @@ export AttributeNamedArgs =
 
 export Whitespace =
   src: "  \n    34"
+  val: 34
   ast: Root ExprStmt AutoInt 34
 
 export Add =
   src: "1 + 2"
+  val: 3
   ast: Root ExprStmt Binary \+, \AutoInt, (AutoInt 1), (AutoInt 2)
 
 export Subtract =
   src: "2 - 1"
+  val: 1
   ast: Root ExprStmt Binary \-, \AutoInt, (AutoInt 2), (AutoInt 1)
 
 export NestAdd =
   src: "3 + 4 + 5"
+  val: 12
   ast:
     Root do
       ExprStmt do
@@ -182,6 +195,7 @@ export MultipleStatements =
   420;
   "butts"
   """
+  val: \butts
   ast:
     Root do
       ExprStmt AutoInt 420
@@ -192,6 +206,7 @@ export MultipleNestingStatements =
   420;
   2 + 3 + 4 + 5
   """
+  val: 14
   ast:
     Root do
       ExprStmt AutoInt 420
@@ -206,20 +221,24 @@ export MultipleNestingStatements =
 
 export CurlyEmptyBlock =
   src: "{}"
+  val: null
   ast: Root Scope!
 
 export CurlyBlock =
   src: "{42}"
+  val: 42
   ast: Root Scope ExprStmt AutoInt 42
 
 export CurlyMultiBlock =
   src: "{420;69}"
+  val: 69
   ast: Root Scope do
     ExprStmt AutoInt 420
     ExprStmt AutoInt 69
 
 export ImplicitMultiBlock =
   src: "420;69"
+  val: 69
   ast: Root do
     ExprStmt AutoInt 420
     ExprStmt AutoInt 69
@@ -236,6 +255,7 @@ export DeclSingle =
 
 export BinaryBool =
   src: "2 == 2"
+  val: true
   ast: Root ExprStmt Binary \==, \AutoBool, (AutoInt 2), (AutoInt 2)
 
 export BinaryVarBool =
@@ -358,3 +378,308 @@ export ComparitorsLesser =
 
 */
 
+export SelfEvalExpr =
+  src: "3"
+  ast: Root ExprStmt AutoInt 3
+  val: 3
+
+export ComplexAddition =
+  src: "(2 + 3) + 5"
+  ast: Root ExprStmt do
+    Binary \+, \AutoInt,
+      Binary \+, \AutoInt, (AutoInt 2), (AutoInt 3)
+      AutoInt 5
+  val: 10
+
+export Environments =
+  src: ""
+  ast: Root []
+  val: null
+
+
+#
+# Interpreter Tests
+#
+
+export SimpleProgram =
+  src: """
+  " Simple Program
+
+  yield 2 + 3
+  """
+  val: 5
+  ast:
+    kind: \scope
+    type: \Root
+    main: null
+    args: []
+    body:
+      * kind: \literal
+        type: \Str
+        main: " Simple Program"
+      * kind: \yield
+        main:
+          kind: \binary
+          type: \AutoNum
+          oper: \+
+          left:
+            kind: \literal
+            type: \AutoInt
+            main: 2
+          right:
+            kind: \literal
+            type: \AutoInt
+            main: 3
+
+
+export StatefulProgram =
+  src: """
+  " Simple Stateful Program
+
+  local Int x = 1
+  x := 2
+  yield x + 1
+  """
+  ast:
+    kind: \scope
+    type: \Root
+    main: null
+    args: []
+    body:
+      * kind: \literal
+        type: \Str
+        main: " Simple Stateful Program"
+
+      * kind: \decl
+        reach: \local
+        type: \Int
+        name: \x
+        main:
+          * kind: \literal
+            type: \AutoInt
+            main: 1
+
+      * kind: \assign
+        reach: \here
+        name: \x
+        main:
+          * kind: \literal
+            type: \AutoInt
+            main: 2
+
+      * kind: \yield
+        main:
+          kind: \binary
+          type: \Int
+          oper: \+
+          left:
+            kind: \ident
+            reach: \here
+            name: \x
+          right:
+            kind: \literal
+            type: \AutoInt
+            main: 1
+
+/*
+export ExampleProgram =
+  src: """
+  " Example Program
+
+  local Int pad = 3
+  share Str txt = "Hello, Sailor"
+
+  <Box
+    :color `red
+    :padding pad
+    :visible true
+
+    <Text txt
+  """
+  ast:
+    kind: \scope
+    type: \Root
+    main: null
+    args: []
+    body:
+      * kind: \literal
+        type: \Str
+        main: " Example Program"
+
+      * kind: \decl
+        reach: \local
+        type: \Int
+        name: \pad
+        main:
+          kind: \literal
+          type: \Int
+          main: 3
+
+      * kind: \decl
+        reach: \share
+        type: \Str
+        name: \txt
+        main:
+          kind: \literal
+          type: \Str
+          main: "Hello, Sailor"
+
+      * kind: \yield
+        main:
+          kind: \scope
+          type: \Box
+          main: null
+          body:
+            * kind: \attr
+              name: \color
+              args:
+                * kind: \atom
+                  name: \red
+                ...
+            * kind: \attr
+              name: \padding
+              args:
+                * kind: \ident
+                  name: \pad
+                  reach: \here
+                ...
+            * kind: \attr
+              name: \visible
+              args:
+                * kind: \literal
+                  type: \Bool
+                  main: true
+                ...
+            * kind: \scope
+              type: \Text
+              args: []
+              body:
+                * kind: \ident
+                  name: \txt
+                  reach: \here
+                ...
+
+
+export ForeverProgram =
+  src: """
+  " Simple Forever Program
+
+  local Int x = 0
+
+  times 5
+    x := x + 1
+    <Text "Hello Sailor"
+    <Text x
+
+  forever
+    x := x + 1
+
+    <Box
+      :attribute x
+  """
+  ast:
+    kind: \scope
+    type: \Root
+    main: null
+    args: []
+    body:
+      * kind: \literal
+        type: \Str
+        main: " Simple Forever Program"
+
+      * kind: \decl
+        reach: \local
+        type: \Int
+        name: \x
+        main:
+          kind: \literal
+          type: \Int
+          main: 0
+
+      * kind: \timing
+        type: \times
+        freq: 5
+        over: 0
+        ease: null
+        main:
+          kind: \scope
+          type: \None
+          args: []
+          main: null
+          body:
+            * kind: \assign
+              name: \x
+              reach: \here
+              main:
+                kind: \binary
+                type: \Int
+                oper: \+
+                left:
+                  kind: \ident
+                  name: \x
+                  reach: \here
+                right:
+                  kind: \literal
+                  type: \AutoInt
+                  main: 1
+
+            * kind: \scope
+              type: \Text
+              args: []
+              main: null
+              body:
+                * kind: \literal
+                  type: \AutoStr
+                  main: "Hello Sailor"
+                ...
+            * kind: \scope
+              type: \Text
+              args: []
+              main: null
+              body:
+                * kind: \ident
+                  name: \x
+                  type: \Int
+                ...
+            ...
+
+      * kind: \timing
+        type: \forever
+        freq: 0
+        over: 0
+        ease: null
+        main:
+          kind: \scope
+          main: null
+          args: []
+          body:
+            * kind: \assign
+              name: \x
+              reach: \here
+              main:
+                kind: \binary
+                type: \Int
+                oper: \+
+                left:
+                  kind: \ident
+                  name: \x
+                  reach: \here
+                right:
+                  kind: \literal
+                  type: \AutoInt
+                  main: 1
+
+            * kind: \scope
+              type: \Box
+              args: []
+              main: null
+              body:
+                * kind: \attr
+                  name: \attribute
+                  args:
+                    * kind: \ident
+                      name: \x
+                      reach: \here
+                    ...
+                ...
+                */

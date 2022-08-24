@@ -1,16 +1,20 @@
 
 # Requires
 
-const Interpreter = require \./interpreter
 const Parser      = require \./parser
 const Runner      = require \./test/runner
 
 
 #
-# Main
+# Interpreter
 #
 
-main = do ->
+
+#
+# Parser
+#
+
+parser-tests = ->
 
   # Key Listener
 
@@ -37,8 +41,9 @@ main = do ->
       | DOWN  => Runner.next!
       | UP    => Runner.previous!
 
-
   # Initialise runner with test suite
   Runner.load (require \./test), Parser
   Runner.set-last!
 
+
+parser-tests!
