@@ -230,33 +230,43 @@ each = (expr, env) ->
   return yld
 
 
-run = (ast) ->
-  queue = []
+#
+# Interpreter
+#
 
-  return each ast, {}
+module.exports =
 
+  # Set up a new environment
+  prime: (ast) ->
+    queue = []
+    return each ast, {}
 
+  # Run all tests
+  start: ->
+    console.clear!
+    examples = require \./test
 
-# Start
+    options   = Object.keys examples
+    selection = options.0
+    program   = examples[selection]
 
-console.clear!
+    render = (.toString!)
 
-examples = require \./test
+    log ""
+    log "\n--- #selection ---\n"
+    log grey program.src
+    log "\n--- AST ---\n"
+    log program.ast.body
+    log "\n--- RUN ---\n"
+    log out = run program
+    out = run program
+    log "\n--- TREE --\n"
+    log render out
 
-options   = Object.keys examples
-selection = options.0
-program   = examples[selection]
+  # Timelike Regex Tests
+  timelike: ->
+    const { time-tests } = require \./test/time
+    [ _, rx ] = select TOKEN_MATCHERS, ([ type ]) -> type is \TIMELIKE
+    time-tests rx
 
-render = (.toString!)
-
-log ""
-log "\n--- #selection ---\n"
-log grey program.src
-log "\n--- AST ---\n"
-log program.ast.body
-log "\n--- RUN ---\n"
-#log out = run program
-out = run program
-log "\n--- TREE --\n"
-log render out
 

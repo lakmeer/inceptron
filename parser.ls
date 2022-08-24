@@ -69,17 +69,18 @@ TOKEN_MATCHERS =
   [ \BLANK,       /^[\s]*$/ ]
 
 
+
+# Token value is ALWAYS a string. Any post-processing goes in the
+# parser function that turns this token into an AST node.
+
+Token = (type, value) -> { type, value, length: value.length }
+
+
 #
 # Core functions
 #
 
-const parse = (source) ->
-
-  # Token value is ALWAYS a string. Any post-processing goes in the
-  # parser function that turns this token into an AST node.
-
-  Token = (type, value) -> { type, value, length: value.length }
-
+export const parse = (source) ->
 
   # Debug logger
 
@@ -451,132 +452,4 @@ const parse = (source) ->
 
   return { output, steps }
 
-
-#
-# Run Tests
-#
-
-# Helpers
-
-current   = 0
-examples  = require \./test
-options   = Object.keys examples
-
-format-step = ([ token, src, peek ], ix) ->
-  switch token
-  | \ERROR => "#{red     \err} | " + bright src
-  | \DEBUG => "#{blue    \log} | " + blue src
-  | \EAT   => "#{magenta \eat} | " + magenta src
-  | \BUMP  => "#{grey    \---} | " + grey src
-  | _      => "#{green   \new} | #{bright token.type}(#{yellow clean-src token.value}) #{bright \<-} \"#src\""
-
-
-# Test run function
-
-run-tests = (current) ->
-  summary   = grey "-"
-  selection = options[current]
-  program   = examples[selection]
-
-  log "\n\n\n"
-  big-header bright "RUNNING TEST CASES"
-
-  for name, program of examples
-    result = parse program.src
-    output = result.output
-    diff   = treediff program.ast, output
-    steps  = result.steps
-
-    inspecting = selection is name
-    any-errors = any steps.map ([ type ]) -> type is \ERROR
-    passed     = not diff.any and not any-errors
-
-
-    # Readout
-
-    if passed
-      big-header plus name
-      summary += "#{plus  \+}#{grey \-}"
-    else
-      big-header minus name
-      summary += "#{minus \-}#{grey \-}"
-
-    if not inspecting
-      for step in steps when step.0 is \ERROR
-        log format-step step
-
-    else
-      log white program.src
-      log ""
-
-      if any-errors
-        log (color 1,41) "Parser errors"
-        log ""
-      else if diff.any
-        log (color 1,41) "AST Mismatch"
-        log ""
-
-      switch mode
-      | COMPACT =>
-        header \Output
-        log dump output, color: on
-      | PARSER =>
-        header \Parser
-        for step in steps when step.0 isnt \BUMP
-          log format-step step
-      | PARSER_ALL =>
-        header \ParserWithBumps
-        for step in steps
-          log format-step step
-      | DIFF =>
-        header \Diff
-        log diff.summary
-      | DIFF_FULL =>
-        header \FullDiff
-        log white \Expected:
-        log green dump program.ast.body
-        log ""
-        log white \Actual:
-        log red dump output.body
-
-      return \\n + summary
-
-
-# Begin
-
-modes = [ NONE, COMPACT, PARSER, PARSER_ALL, DIFF, DIFF_FULL ] = [ 0, 1, 2, 3, 4, 5 ]
-
-mode = PARSER
-
-stdin = process.stdin
-
-[ UP, DOWN, RIGHT, LEFT ] = [ 65, 66, 67, 68 ]
-
-stdin.setRawMode on .resume!
-stdin.setEncoding \utf8
-
-stdin.on \data, (key) ->
-  process.exit! if key is '\u0003'
-  str = key.toString!
-  if str.length is 3
-    switch str.char-code-at 2
-    | UP    => current := limit 0, options.length - 1, current - 1
-    | DOWN  => current := limit 0, options.length - 1, current + 1
-    | LEFT  => mode    := limit 0, modes.length - 1, mode - 1
-    | RIGHT => mode    := limit 0, modes.length - 1, mode + 1
-  log run-tests current
-
-
-# Timelike Regex Tests
-
-# const { time-tests } = require \./test/time
-# [ _, rx ] = select TOKEN_MATCHERS, ([ type ]) -> type is \TIMELIKE
-# time-tests rx
-
-
-# Selection
-
-mode := DIFF
-current := options.length - 1
-log run-tests current
 

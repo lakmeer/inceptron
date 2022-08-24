@@ -38,7 +38,7 @@ more-children = (obj, x) ->
 # Treediff
 #
 
-export const treediff = (a, b) ->
+module.exports = (a, b) ->
 
   diff = detailed-diff a, b
 

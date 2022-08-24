@@ -47,7 +47,7 @@ OverStmt = (span, ease, main) ->
   main: main
 
 Yield = (main) ->
-  kind: \yield
+  kind: \yiel
   main: main
 
 TreeNode = (type, ...args) ->
