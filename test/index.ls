@@ -22,8 +22,7 @@ ExprStmt = ->
   main: it
 
 DeclStmt = (reach, type, name, value) ->
-  allowed = <[ local share uniq lift const ]>
-  if allowed.includes reach
+  if <[ local share uniq lift const ]>.includes reach
     kind:  \decl-stmt
     type:  type
     name:  name
@@ -54,21 +53,18 @@ Yield = (main) ->
   kind: \yield
   main: main
 
-TreeNode = (type, ...args) ->
-  main = []
-
-  if args.length and args[*-1].kind isnt \treeprop
-    main := args.pop!
-
+TreeNode = (type, main, ...body-args) ->
+  args = while body-args.length and body-args.0.kind is \tree-prop then body-args.shift!
   kind: \treenode
   type: type
-  args: args
   main: main
+  args: args
+  body: body-args
 
 TreeProp = (name, value) ->
-  kind: \treeprop
-  type: value.type
-  name: name
+  kind:  \tree-prop
+  type:  value.type
+  name:  name
   value: value
 
 Attr = (name, ...args) ->
@@ -105,6 +101,10 @@ AutoTime = ->
   kind: \literal
   type: \AutoTime
   value: if typeof! it is \String then parse-time it else it
+
+Symbol = ->
+  kind: \symbol
+  name: it
 
 Binary = (oper, type, left, right) ->
   kind: \binary
@@ -262,7 +262,7 @@ export AssignmentExpression =
   src: """
   x := 2
   """
-  ast: Root ExprStmt Assign (Ident \x), (AutoInt 2)
+  ast: Root ExprStmt Assign \x, (AutoInt 2)
 
 export DeclSingle =
   src: "local Int x = 42"
@@ -303,7 +303,7 @@ export IfSimple =
       Ident \x
       AutoInt 69
     Scope do
-      ExprStmt Assign (Ident \x), (AutoInt 42)
+      ExprStmt Assign \x, (AutoInt 42)
 
 export IfElse =
   src: """
@@ -315,8 +315,8 @@ export IfElse =
   """
   ast: Root IfStmt do
         Binary \==, \AutoBool, (Ident \x), (AutoInt 69)
-        Scope ExprStmt Assign (Ident \x), (AutoInt 42)
-        Scope ExprStmt Assign (Ident \x), (AutoInt 420)
+        Scope ExprStmt Assign \x, (AutoInt 42)
+        Scope ExprStmt Assign \x, (AutoInt 420)
 
 export BooleanKeywords =
   src: "true; false"
@@ -347,7 +347,7 @@ export Times =
   src: """times 4 { x := x + 1 }"""
   ast:
     Root RepeatStmt (AutoInt 4),
-      Scope ExprStmt Assign (Ident \x),
+      Scope ExprStmt Assign \x,
         Binary \+, \AutoNum, (Ident \x), (AutoInt 1)
 
 export TimeUnits =
@@ -366,13 +366,13 @@ export Over =
   src: """over 2s { x := 5 }"""
   ast:
     Root OverStmt (AutoTime \2s), null,
-      Scope ExprStmt Assign (Ident \x), (AutoInt 5)
+      Scope ExprStmt Assign \x, (AutoInt 5)
 
 export OverEasy =
   src: """over 2s ease sq { x := 5 }"""
   ast:
     Root OverStmt (AutoTime \2s), (Ident \sq),
-      Scope ExprStmt Assign (Ident \x), (AutoInt 5)
+      Scope ExprStmt Assign \x, (AutoInt 5)
 
 export YieldKeyword =
   src: "yield 4"
@@ -382,14 +382,28 @@ export YieldKeyword =
 export TreeConstructor =
   src: "<None"
   ast:
-    Root TreeNode \None
+    Root TreeNode \None, null
+
+export TreeMain =
+  src: "<Text \"Hello, Sailor"
+  ast:
+    Root TreeNode \Text, AutoStr "Hello, Sailor"
 
 export TreeProps =
   src: "<Box x=2 y=3"
   ast:
-    Root TreeNode \Box,
+    Root TreeNode \Box, null,
       (TreeProp \x, AutoInt 2)
       (TreeProp \y, AutoInt 3)
+
+export TreeBody =
+  src: """
+  <Box
+    x := 3
+  """
+  ast:
+    Root TreeNode \Box, null,
+      Assign \x, (AutoInt 3)
 
 
 # Waiting on operator precedence:
@@ -430,6 +444,22 @@ export SelfEvalExpr =
   ast: Root ExprStmt AutoInt 3
   val: 3
 
+export NestedAddition =
+  src: "2 + 3 + 5"
+  ast: Root ExprStmt do
+    Binary \+, \AutoInt,
+      Binary \+, \AutoInt, (AutoInt 2), (AutoInt 3)
+      AutoInt 5
+  val: 10
+
+export ForcedAddition =
+  src: "2 + (3 + 5)"
+  ast: Root ExprStmt do
+    Binary \+, \AutoInt,
+      AutoInt 2
+      Binary \+, \AutoInt, (AutoInt 3), (AutoInt 5)
+  val: 10
+
 export ComplexAddition =
   src: "(2 + 3) + 5"
   ast: Root ExprStmt do
@@ -437,11 +467,6 @@ export ComplexAddition =
       Binary \+, \AutoInt, (AutoInt 2), (AutoInt 3)
       AutoInt 5
   val: 10
-
-export Environments =
-  src: ""
-  ast: Root []
-  val: null
 
 
 #
@@ -472,12 +497,9 @@ export StatefulProgram =
     Root do
       ExprStmt AutoStr " Simple Stateful Program"
       DeclStmt \local, \Int, \x, (AutoInt 1)
-      ExprStmt Assign (Ident \x), (AutoInt 2)
+      ExprStmt Assign \x, (AutoInt 2)
       Yield Binary \+ \AutoNum, (Ident \x), (AutoInt 1)
 
-
-
-/*
 export ExampleProgram =
   src: """
   " Example Program
@@ -493,69 +515,18 @@ export ExampleProgram =
     <Text txt
   """
   ast:
-    kind: \scope
-    type: \Root
-    main: null
-    args: []
-    body:
-      * kind: \literal
-        type: \Str
-        main: " Example Program"
+    Root do
+      ExprStmt AutoStr " Example Program"
+      DeclStmt \local \Int \pad, (AutoInt 3)
+      DeclStmt \share \Str \txt, (AutoStr "Hello, Sailor")
 
-      * kind: \decl
-        reach: \local
-        type: \Int
-        name: \pad
-        main:
-          kind: \literal
-          type: \Int
-          main: 3
+      TreeNode \Box, null,
+        AttrStmt Attr \color,   (Symbol \red)
+        AttrStmt Attr \padding, (Ident \pad)
+        AttrStmt Attr \visible, (AutoBool true)
+        TreeNode \Text, (Ident \txt)
 
-      * kind: \decl
-        reach: \share
-        type: \Str
-        name: \txt
-        main:
-          kind: \literal
-          type: \Str
-          main: "Hello, Sailor"
-
-      * kind: \yield
-        main:
-          kind: \scope
-          type: \Box
-          main: null
-          body:
-            * kind: \attr
-              name: \color
-              args:
-                * kind: \atom
-                  name: \red
-                ...
-            * kind: \attr
-              name: \padding
-              args:
-                * kind: \ident
-                  name: \pad
-                  reach: \here
-                ...
-            * kind: \attr
-              name: \visible
-              args:
-                * kind: \literal
-                  type: \Bool
-                  main: true
-                ...
-            * kind: \scope
-              type: \Text
-              args: []
-              body:
-                * kind: \ident
-                  name: \txt
-                  reach: \here
-                ...
-
-
+/*
 export ForeverProgram =
   src: """
   " Simple Forever Program

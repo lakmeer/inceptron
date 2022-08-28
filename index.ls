@@ -31,8 +31,8 @@ parser-tests = ->
 
     switch str
     | \q => process.exit!
-    | \k => Runner.previous!
-    | \j => Runner.next!
+    | \k => Runner.mode-up!
+    | \j => Runner.mode-dn!
 
     if str.length is 3
       switch str.char-code-at 2
@@ -44,7 +44,7 @@ parser-tests = ->
   # Initialise runner with test suite
   Runner.load (require \./test), Parser
   Runner.set-mode 2
-  Runner.select 25
+  Runner.select 38
 
 
 parser-tests!

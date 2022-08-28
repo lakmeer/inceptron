@@ -1,11 +1,11 @@
 
 # Helpers
 
-{ log, parse-time, any, dump, colors, treediff } = require \./utils
+{ log, nop, parse-time, any, dump, colors, treediff, truncate } = require \./utils
 { treediff, any-diffs } = treediff
 { color, bright, grey, red, yellow, green, blue, magenta, white, plus, minus, invert } = colors
 
-const clean-src = (txt = "") -> txt.replace /\n/g, bright blue \⏎
+const clean-src = (txt, c=on) -> txt.replace /\n/g, if c then bright blue \⏎ else nop \⏎
 
 
 #
@@ -26,7 +26,6 @@ TOKEN_MATCHERS =
   # Keywords
   [ \IF,          /^if\b/ ]
   [ \ELSE,        /^else\b/ ]
-  [ \BOOL,        /^(true|false)\b/ ]
   [ \NULL,        /^null\b/ ]
   [ \TIMES,       /^times\b/ ]
   [ \OVER,        /^over\b/ ]
@@ -40,7 +39,9 @@ TOKEN_MATCHERS =
   [ \SUBATTR,     /^::[\w]+/ ]
   [ \TREENODE,    /^<[\w]+\b/ ]
   [ \INTLIKE,     /^[\d]+/ ]
-  [ \STRING,      /^"[^"]*"/ ]
+  [ \SYMBOL,      /^`\w+/ ]
+  [ \BOOL,        /^(true|false)\b/ ]
+  [ \STRING,      /^"[^"\n]*"/ ]
   [ \STRCOM,      /^"[^"\n]*$/ ]
   [ \STRCOM,      /^"[^"\n]*/ ]
 
@@ -62,7 +63,7 @@ TOKEN_MATCHERS =
   [ \OPER_NOT,    /^not\b/ ]
 
   # Identifiers
-  [ \TYPE,        /^[A-Z]\w+/ ]
+  [ \TYPE,        /^[A-Z]\w+(`s)?/ ]
   [ \IDENT,       /^\w+/ ]
 
   # Whitespace
@@ -79,12 +80,14 @@ Token = (type, value) -> { type, value, length: value.length }
 
 
 #
-# Core functions
+# Core Parse Function
 #
 
 export const parse = (source) ->
 
+  #
   # Debug logger
+  #
 
   dent   = 0
   steps  = []
@@ -93,7 +96,7 @@ export const parse = (source) ->
   debug  = (...args) -> steps.push [ \LOG,  dent, lookahead, ilog invert clean-src args.join ' ' ]
   error  = (...args) -> steps.push [ \ERR,  dent, lookahead, ilog minus clean-src args.join ' ' ]
   status = -> steps.push [ \NEW,  dent, lookahead,
-    ilog "#{green \new} #{lookahead.type}(#{yellow clean-src lookahead.value}) <- \"#{yellow clean-src lookahead.value}#{clean-src source.slice cursor}\"" ]
+    ilog "#{green \new} #{lookahead.type} <- #{yellow clean-src lookahead.value, false}#{clean-src truncate 14, \..., source.slice cursor}" ]
 
   wrap = (name, ƒ) -> (...args) ->
     bump ilog blue \+ + name
@@ -104,13 +107,14 @@ export const parse = (source) ->
     return result
 
 
+  #
   # Tokeniser
+  #
 
   cursor    = 0
   lookahead = null
 
   set-lookahead = (token) ->
-    log \set-lookahead token
     lookahead := token
     status!
 
@@ -170,18 +174,20 @@ export const parse = (source) ->
 
   check-valid-assign = (node) ->
     if node.kind is \ident
-      return node
+      return node.name
     error "Can't assign to non-identifier"
 
   one-of = (types) -> -> types.includes it
 
   is-bool-op = one-of <[ OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE OPER_AND OPER_OR ]>
   is-math-op = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV ]>
-  is-literal = one-of <[ TIMELIKE INTLIKE STRING BOOL ]>
+  is-literal = one-of <[ TIMELIKE INTLIKE STRING BOOL SYMBOL ]>
   is-bin-op  = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE OPER_AND OPER_OR ]>
 
 
+  #
   # Parser Nodes
+  #
 
   Root = wrap \Root ->
     kind: \scope
@@ -203,6 +209,7 @@ export const parse = (source) ->
     kind: \scope
     type: \???
     body: body
+
 
   # Statements
 
@@ -296,30 +303,44 @@ export const parse = (source) ->
     kind: \yield
     main: PrimaryExpression!
 
+
   # TreeNodes
 
   TreeNode = wrap \TreeNode ->
     type = eat \TREENODE .slice 1
-    args = if lookahead.type is \IDENT then TreePropList! else []
+    main = null
+    args = []
+
+    if lookahead.type isnt \NEWLINE and lookahead.type isnt \EOF
+      if peek!type isnt \OPER_EQ
+        main := Expression!
+      args := TreePropList!
+
+    body = Body!
+
+    if body.length is 1 and body[*-1].kind is \expr-stmt
+      body[*-1] = body[*-1].main
+
     kind: \treenode
     type: type
+    main: main
     args: args
-    main: Body!
+    body: body
+
+  TreePropList = wrap \TreeArgsList ->
+    args = []
+    while lookahead.type is \IDENT
+      args.push TreeProperty!
+    return args
 
   TreeProperty = wrap \TreeProperty ->
     name = eat \IDENT
     eat \OPER_EQ
     value = PrimaryExpression!
-    kind: \treeprop
+    kind: \tree-prop
     type: value?.type or \???
     name: name
     value: value
-
-  TreePropList = wrap \TreeArgsList ->
-    args = [ TreeProperty! ]
-    while lookahead.type is \IDENT
-      args.push TreeProperty!
-    return args
 
 
   # Attributes
@@ -339,7 +360,7 @@ export const parse = (source) ->
 
   AttrArgsList = wrap \AttrArgsList ->
     args = [ AttrArgument! ]
-    while lookahead.type isnt \EOF
+    while lookahead.type isnt \EOF and lookahead.type isnt \NEWLINE
       args.push AttrArgument!
     return args
 
@@ -361,26 +382,22 @@ export const parse = (source) ->
     if lookahead.type is \OPER_NOT
       return UnaryExpression!
 
-    if is-literal lookahead.type
-      return Literal!
-
     if lookahead.type is \IDENT
       return Identifier!
 
-    error "PrimaryExpression couldn't determine type"
-    debug lookahead.type, peek!type
-    return null
+    return Expression!
 
   Expression = wrap \Expression ->
-    if peek! is \OPER_ASS
-      return AssignmentExpression!
+    if is-literal lookahead.type
+      return Literal!
 
     switch lookahead.type
     | \IDENT      => AssignmentExpression!
     | \INTLIKE    => BinaryExpression!
     | \STRING     => Literal!
     | \PAREN_OPEN => ParenExpression!
-    | _           => debug "No expression for type #that"
+    | \SYMBOL     => Symbol!
+    | _           => debug "No expression for type #that"; eat that; null
 
   ParenExpression = wrap \ParenExpression ->
     eat \PAREN_OPEN
@@ -459,7 +476,13 @@ export const parse = (source) ->
     | \INTLIKE  => NumericLiteral!
     | \BOOL     => BooleanLiteral!
     | \STRING   => StringLiteral!
-    | _         => null
+    | \SYMBOL   => Symbol!
+    | _         => eat lookahead.type; null
+
+  Symbol = wrap \Symbol ->
+    if eat \SYMBOL
+      kind: \symbol
+      name: that.slice 1
 
   BooleanLiteral = wrap \BooleanLiteral ->
     if eat \BOOL

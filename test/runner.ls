@@ -1,7 +1,7 @@
 const { log, pad, pad-end, select, limit, header, dump, big-header, clean-src, colors, treediff, any } = require \../utils
 const { blue, magenta, cyan, bright, yellow, green, red, grey, minus, invert, white } = colors
 
-MODES = <[ Ast Steps Nodes Diff Compare ]>
+MODES = <[ Off Ast Steps Nodes Diff Compare ]>
 
 margin = 11
 
@@ -54,7 +54,7 @@ module.exports = Runner = do ->
         log bright name
         result = Parser.parse program.src
         name:   name
-        diff:   treediff program.ast, result.output
+        diff:   treediff result.output, program.ast
         steps:  result.steps
         input:  program.ast
         output: result.output
@@ -65,7 +65,7 @@ module.exports = Runner = do ->
   # Renderer
 
   render = ->
-    summary   = ""
+    summary   = " "
     selection = options[current]
     program   = examples[selection]
     mode      = MODES[mode-ix]
@@ -77,10 +77,10 @@ module.exports = Runner = do ->
     for result, ix in results
       { name, diff } = result
       passed = not diff.any and not any-errors
-      summary += bright if passed then green ' ◉' else red ' ◯'
+      summary += bright if passed then green \◉ else red \◯
 
     log summary
-    log yellow \┏ + ('━━' * current) + \┛
+    log yellow \┏ + ('━' * current) + \┛
 
     { name, steps, diff, output } = select results, -> it.name is selection
 
@@ -93,7 +93,7 @@ module.exports = Runner = do ->
     log (yellow \┗), (bright white \===), (bright blue current),
       '•', (bright if passed then green \Passed else red \Failed),
       '•', (mode-menu mode),
-      (bright yellow name)
+      '•', (bright yellow name)
 
     log ""
     log white program.src
@@ -108,6 +108,8 @@ module.exports = Runner = do ->
     log "---\n"
 
     switch mode
+    | \Off =>
+
     | \Ast =>
       log dump output, color: on
 
@@ -124,11 +126,14 @@ module.exports = Runner = do ->
       log diff.summary
 
     | \Compare =>
-      log white \Expected:
-      log bright green dump program.ast.body
-      log ""
-      log white \Actual:
-      log bright red dump output.body
+      width = 44
+      left  = dump program.ast.body .split \\n
+      right = dump output.body .split \\n
+
+      log white (pad-end width, \Expected:) + (white \Actual:)
+
+      for i from 0 til Math.max left.length, right.length
+        log (bright green pad-end width, left[i]) + bright red right[i]
 
     | _ => throw "Unsupported inspector mode: #that"
 

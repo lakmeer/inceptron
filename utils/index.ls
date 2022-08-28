@@ -3,18 +3,16 @@
 
 const { dump } = require \./dump
 const colors   = require \./colors
-const helpers  = require \./helpers
 const treediff = require \./treediff
 
 
 # Re-export
 
-const { log, nop, select, header, big-header, readfile, undef, def, join, defer, pad, pad-end, any, all, limit } = helpers
+module.exports <<< require \./helpers
 
 export dump
 export colors
 export treediff
-export log, nop, select, header, big-header, readfile, undef, def, join, defer, pad, pad-end, any, all, limit
 
 
 # TimeVal - turns HMS values into milliseconds
