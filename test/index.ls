@@ -21,13 +21,13 @@ ExprStmt = ->
   type: \???
   main: it
 
-DeclStmt = (reach, type, ident, value) ->
+DeclStmt = (reach, type, name, value) ->
   allowed = <[ local share uniq lift const ]>
   if allowed.includes reach
     kind:  \decl-stmt
     type:  type
+    name:  name
     reach: reach
-    ident: ident
     value: value
   else
     throw "Unsupported reach keyword: #reach"
@@ -86,6 +86,11 @@ AttrStmt = ->
   type: \???
   attr: it
 
+AutoBool = ->
+  kind: \literal
+  type: \AutoBool
+  value: !!it
+
 AutoInt = ->
   kind: \literal
   type: \AutoInt
@@ -107,6 +112,12 @@ Binary = (oper, type, left, right) ->
   oper: oper
   left: left
   right: right
+
+Unary = (oper, type, main) ->
+  kind: \unary
+  type: type
+  oper: oper
+  main: main
 
 Ident = (name, reach = \here) ->
   kind: \ident
@@ -255,7 +266,7 @@ export AssignmentExpression =
 
 export DeclSingle =
   src: "local Int x = 42"
-  ast: Root DeclStmt \local, \Int, (Ident \x), (AutoInt 42)
+  ast: Root DeclStmt \local, \Int, \x, (AutoInt 42)
 
 export ReachKeywords =
   src: """
@@ -266,11 +277,11 @@ export ReachKeywords =
   local Int e = 5
   """
   ast: Root do
-    DeclStmt \local, \Int, (Ident \a), (AutoInt 1)
-    DeclStmt \share, \Int, (Ident \b), (AutoInt 2)
-    DeclStmt \lift,  \Int, (Ident \c), (AutoInt 3)
-    DeclStmt \uniq,  \Int, (Ident \d), (AutoInt 2)
-    DeclStmt \local, \Int, (Ident \e), (AutoInt 5)
+    DeclStmt \local, \Int, \a, (AutoInt 1)
+    DeclStmt \share, \Int, \b, (AutoInt 2)
+    DeclStmt \lift,  \Int, \c, (AutoInt 3)
+    DeclStmt \uniq,  \Int, \d, (AutoInt 4)
+    DeclStmt \local, \Int, \e, (AutoInt 5)
 
 export BinaryBool =
   src: "2 == 2"
@@ -307,13 +318,30 @@ export IfElse =
         Scope ExprStmt Assign (Ident \x), (AutoInt 42)
         Scope ExprStmt Assign (Ident \x), (AutoInt 420)
 
+export BooleanKeywords =
+  src: "true; false"
+  ast: Root do
+    ExprStmt (AutoBool true)
+    ExprStmt (AutoBool false)
+
 export LogicalKeywordsAnd =
-  src: """x and y"""
+  src: "x and y"
   ast: Root ExprStmt Binary \and, \AutoBool, (Ident \x), (Ident \y)
 
 export LogicalKeywordsOr =
-  src: """x or y"""
+  src: "x or y"
   ast: Root ExprStmt Binary \or, \AutoBool, (Ident \x), (Ident \y)
+
+export LogicalKeywordNot =
+  src: "not x"
+  ast: Root ExprStmt Unary \not, \AutoBool, (Ident \x)
+
+export LogicalKeywordNestedNot =
+  src: "not not not x"
+  ast: Root ExprStmt do
+    Unary \not, \AutoBool,
+      Unary \not, \AutoBool,
+        Unary \not, \AutoBool, (Ident \x)
 
 export Times =
   src: """times 4 { x := x + 1 }"""
@@ -428,28 +456,9 @@ export SimpleProgram =
   """
   val: 5
   ast:
-    kind: \scope
-    type: \Root
-    main: null
-    args: []
-    body:
-      * kind: \literal
-        type: \Str
-        main: " Simple Program"
-      * kind: \yield
-        main:
-          kind: \binary
-          type: \AutoNum
-          oper: \+
-          left:
-            kind: \literal
-            type: \AutoInt
-            main: 2
-          right:
-            kind: \literal
-            type: \AutoInt
-            main: 3
-
+    Root do
+      ExprStmt AutoStr " Simple Program"
+      Yield Binary \+ \AutoInt, (AutoInt 2), (AutoInt 3)
 
 export StatefulProgram =
   src: """
@@ -460,45 +469,13 @@ export StatefulProgram =
   yield x + 1
   """
   ast:
-    kind: \scope
-    type: \Root
-    main: null
-    args: []
-    body:
-      * kind: \literal
-        type: \Str
-        main: " Simple Stateful Program"
+    Root do
+      ExprStmt AutoStr " Simple Stateful Program"
+      DeclStmt \local, \Int, \x, (AutoInt 1)
+      ExprStmt Assign (Ident \x), (AutoInt 2)
+      Yield Binary \+ \AutoNum, (Ident \x), (AutoInt 1)
 
-      * kind: \decl
-        reach: \local
-        type: \Int
-        name: \x
-        main:
-          * kind: \literal
-            type: \AutoInt
-            main: 1
 
-      * kind: \assign
-        reach: \here
-        name: \x
-        main:
-          * kind: \literal
-            type: \AutoInt
-            main: 2
-
-      * kind: \yield
-        main:
-          kind: \binary
-          type: \Int
-          oper: \+
-          left:
-            kind: \ident
-            reach: \here
-            name: \x
-          right:
-            kind: \literal
-            type: \AutoInt
-            main: 1
 
 /*
 export ExampleProgram =

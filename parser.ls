@@ -3,7 +3,7 @@
 
 { log, parse-time, any, dump, colors, treediff } = require \./utils
 { treediff, any-diffs } = treediff
-{ color, bright, grey, red, yellow, green, blue, magenta, white, plus, minus } = colors
+{ color, bright, grey, red, yellow, green, blue, magenta, white, plus, minus, invert } = colors
 
 const clean-src = (txt = "") -> txt.replace /\n/g, bright blue \⏎
 
@@ -26,12 +26,11 @@ TOKEN_MATCHERS =
   # Keywords
   [ \IF,          /^if\b/ ]
   [ \ELSE,        /^else\b/ ]
-  [ \TRUE,        /^true\b/ ]
-  [ \FALSE,       /^false\b/ ]
+  [ \BOOL,        /^(true|false)\b/ ]
   [ \NULL,        /^null\b/ ]
   [ \TIMES,       /^times\b/ ]
   [ \OVER,        /^over\b/ ]
-  [ \REACH,       /^local|share|uniq|lift|const\b/ ]
+  [ \REACH,       /^(local|share|uniq|lift|const)\b/ ]
   [ \EASE,        /^ease\b/ ]
   [ \YIELD,       /^yield\b/ ]
 
@@ -44,10 +43,6 @@ TOKEN_MATCHERS =
   [ \STRING,      /^"[^"]*"/ ]
   [ \STRCOM,      /^"[^"\n]*$/ ]
   [ \STRCOM,      /^"[^"\n]*/ ]
-
-  # Identifiers
-  [ \TYPE,        /^[A-Z]\w+/ ]
-  [ \IDENT,       /^\w+/ ]
 
   # Operators
   [ \OPER_NOT,    /^!/ ]
@@ -65,6 +60,10 @@ TOKEN_MATCHERS =
   [ \OPER_AND,    /^and\b/ ]
   [ \OPER_OR,     /^or\b/ ]
   [ \OPER_NOT,    /^not\b/ ]
+
+  # Identifiers
+  [ \TYPE,        /^[A-Z]\w+/ ]
+  [ \IDENT,       /^\w+/ ]
 
   # Whitespace
   [ \SPACE,       /^[\s]+/ ]
@@ -89,11 +88,12 @@ export const parse = (source) ->
 
   dent   = 0
   steps  = []
-  bump   = (c, type) -> steps.push [ \BUMP, dent, lookahead, c ]
-  debug  = (...args) -> steps.push [ \LOG,  dent, lookahead, clean-src args.join ' ' ]
-  error  = (...args) -> steps.push [ \ERR,  dent, lookahead, clean-src args.join ' ' ]
-  status =           -> steps.push [ \NEW,  dent, lookahead, ilog "#{green \new} #{lookahead.type}(#{yellow clean-src lookahead.value}) <- \"#{yellow clean-src lookahead.value}#{clean-src source.slice cursor}\"" ]
   ilog   = (...args) -> log ' ' * dent, ...args; return args[0]
+  bump   = (c, type) -> steps.push [ \BUMP, dent, lookahead, c ]
+  debug  = (...args) -> steps.push [ \LOG,  dent, lookahead, ilog invert clean-src args.join ' ' ]
+  error  = (...args) -> steps.push [ \ERR,  dent, lookahead, ilog minus clean-src args.join ' ' ]
+  status = -> steps.push [ \NEW,  dent, lookahead,
+    ilog "#{green \new} #{lookahead.type}(#{yellow clean-src lookahead.value}) <- \"#{yellow clean-src lookahead.value}#{clean-src source.slice cursor}\"" ]
 
   wrap = (name, ƒ) -> (...args) ->
     bump ilog blue \+ + name
@@ -110,6 +110,7 @@ export const parse = (source) ->
   lookahead = null
 
   set-lookahead = (token) ->
+    log \set-lookahead token
     lookahead := token
     status!
 
@@ -124,9 +125,9 @@ export const parse = (source) ->
     set-lookahead next!
     return token.value
 
-  peek =  ->
+  peek = (d = 0) ->
     if cursor >= source.length
-      return [ \EOF, "" ]
+      return Token \EOF, ""
 
     char = source[ cursor ]
     rest = source.slice cursor
@@ -136,24 +137,25 @@ export const parse = (source) ->
         switch type
         | \BLANK, \SPACE, \INDENT =>
           cursor := cursor + token.length
-          return peek!
-        | otherwise               => return [ type, token ]
-        return [ type, token ]
+          return peek d + 1
+        | _ =>
+          return Token type, token
 
     if !char
       error "Char token was '#{typeof! char}' at #{cursor}", source.slice cursor
     else
       throw error "Unexpected token: `#char`"
 
-    return [ \UNKNOWN, char ]
+    return Token \UNKNOWN, char
 
   next = ->
-    [ type, token ] = peek!
+    token = peek!
     cursor := cursor + token.length
 
-    switch type
-    | \STRCOM => return Token \STRING, token.trim-left!
-    | _       => return Token type, token
+    if token.type is \STRCOM
+      Token \STRING, token.value.trim-left!
+    else
+      token
 
   read = (ƒ) ->
     i = cursor
@@ -173,10 +175,10 @@ export const parse = (source) ->
 
   one-of = (types) -> -> types.includes it
 
-  is-bool-op = one-of <[ OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE AND OR ]>
+  is-bool-op = one-of <[ OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE OPER_AND OPER_OR ]>
   is-math-op = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV ]>
-  is-literal = one-of <[ TIMELIKE INTLIKE STRING ]>
-  is-bin-op  = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE AND OR ]>
+  is-literal = one-of <[ TIMELIKE INTLIKE STRING BOOL ]>
+  is-bin-op  = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE OPER_AND OPER_OR ]>
 
 
   # Parser Nodes
@@ -197,7 +199,7 @@ export const parse = (source) ->
   Scope = wrap \Scope ->
     eat \SCOPE_BEG
     body = Body!
-    eat \SCOPE_END
+    if lookahead.type isnt \EOF then eat \SCOPE_END
     kind: \scope
     type: \???
     body: body
@@ -238,10 +240,10 @@ export const parse = (source) ->
     type  = eat \TYPE
     ident = Identifier!
     eat \OPER_EQ
-    kind: \decl-stmt
-    type: type
+    kind:  \decl-stmt
+    type:  type
     reach: reach
-    name: ident.name
+    name:  ident.name
     value: PrimaryExpression!
 
   IfStatement = wrap \IfStatement ->
@@ -309,7 +311,7 @@ export const parse = (source) ->
     eat \OPER_EQ
     value = PrimaryExpression!
     kind: \treeprop
-    type: value.type
+    type: value?.type or \???
     name: name
     value: value
 
@@ -344,19 +346,35 @@ export const parse = (source) ->
   AttrArgument = wrap \AttrArgument ->
     switch lookahead.type
     | \SUBATTR => SubAttribute!
-    | _        => PrimaryExpression!
+    | _        => Expression!
+
 
   # Expressions
 
-  PrimaryExpression = wrap \PrimaryExpression ->
+  PrimaryExpression = wrap \PrimaryExpression ~>
+    if is-bin-op peek!type
+      return BinaryExpression!
+
+    if peek!type is \OPER_ASS
+      return AssignmentExpression!
+
+    if lookahead.type is \OPER_NOT
+      return UnaryExpression!
+
     if is-literal lookahead.type
       return Literal!
 
-    switch lookahead.type
-    | \PAREN_OPEN => ParenExpression!
-    | _           => BinaryExpression!
+    if lookahead.type is \IDENT
+      return Identifier!
+
+    error "PrimaryExpression couldn't determine type"
+    debug lookahead.type, peek!type
+    return null
 
   Expression = wrap \Expression ->
+    if peek! is \OPER_ASS
+      return AssignmentExpression!
+
     switch lookahead.type
     | \IDENT      => AssignmentExpression!
     | \INTLIKE    => BinaryExpression!
@@ -380,6 +398,7 @@ export const parse = (source) ->
       return do
         kind: \unary
         oper: oper
+        type: \AutoBool
         main: UnaryExpression!
     else
       return LeftHandSideExpression!
@@ -408,9 +427,8 @@ export const parse = (source) ->
     return node
 
   AssignmentExpression = wrap \AssignmentExpression ->
-    PartialAssignmentExpression LeftHandSideExpression!
+    left = LeftHandSideExpression!
 
-  PartialAssignmentExpression = (left) ->
     if lookahead.type isnt \OPER_ASS
       return left
 
@@ -423,7 +441,10 @@ export const parse = (source) ->
     right: right
 
   LeftHandSideExpression = wrap \LeftHandSideExpression ->
-    Identifier!
+    if is-literal lookahead.type
+      Literal!
+    else
+      Identifier!
 
   # Leaves
 
@@ -436,8 +457,15 @@ export const parse = (source) ->
     switch lookahead.type
     | \TIMELIKE => TimeLiteral!
     | \INTLIKE  => NumericLiteral!
+    | \BOOL     => BooleanLiteral!
     | \STRING   => StringLiteral!
     | _         => null
+
+  BooleanLiteral = wrap \BooleanLiteral ->
+    if eat \BOOL
+      kind: \literal
+      type: \AutoBool
+      value: that is \true
 
   TimeLiteral = wrap \TimeLiteral ->
     if eat \TIMELIKE

@@ -27,4 +27,5 @@ exports.grey    = color(BRIGHT, BLACK)
 exports.bright = color(BRIGHT)
 exports.plus   = color(BRIGHT, GREEN + 10)
 exports.minus  = color(BRIGHT, RED   + 10)
+exports.invert = color(BRIGHT, CYAN  + 10)
 
