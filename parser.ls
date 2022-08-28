@@ -1,7 +1,7 @@
 
 # Helpers
 
-{ log, parse-time, select, any, limit, header, big-header, dump, colors, treediff } = require \./utils
+{ log, parse-time, any, dump, colors, treediff } = require \./utils
 { treediff, any-diffs } = treediff
 { color, bright, grey, red, yellow, green, blue, magenta, white, plus, minus } = colors
 
@@ -29,12 +29,10 @@ TOKEN_MATCHERS =
   [ \TRUE,        /^true\b/ ]
   [ \FALSE,       /^false\b/ ]
   [ \NULL,        /^null\b/ ]
-  [ \AND,         /^and\b/ ]
-  [ \OR,          /^or\b/ ]
   [ \TIMES,       /^times\b/ ]
   [ \OVER,        /^over\b/ ]
-  [ \EASE,        /^ease\b/ ]
   [ \REACH,       /^local|share|uniq|lift|const\b/ ]
+  [ \EASE,        /^ease\b/ ]
   [ \YIELD,       /^yield\b/ ]
 
   # Literals
@@ -47,7 +45,12 @@ TOKEN_MATCHERS =
   [ \STRCOM,      /^"[^"\n]*$/ ]
   [ \STRCOM,      /^"[^"\n]*/ ]
 
+  # Identifiers
+  [ \TYPE,        /^[A-Z]\w+/ ]
+  [ \IDENT,       /^\w+/ ]
+
   # Operators
+  [ \OPER_NOT,    /^!/ ]
   [ \OPER_ADD,    /^[\+]/ ]
   [ \OPER_SUB,    /^[\-]/ ]
   [ \OPER_MUL,    /^[\*]/ ]
@@ -59,14 +62,14 @@ TOKEN_MATCHERS =
   [ \OPER_GT,     /^</ ]
   [ \OPER_LTE,    /^>=/ ]
   [ \OPER_LT,     /^>/ ]
-
-  # Identifiers
-  [ \TYPE,        /^[A-Z]\w+/ ]
-  [ \IDENT,       /^\w+/ ]
+  [ \OPER_AND,    /^and\b/ ]
+  [ \OPER_OR,     /^or\b/ ]
+  [ \OPER_NOT,    /^not\b/ ]
 
   # Whitespace
-  [ \SPACE,       /^[\s]*/ ]
-  [ \BLANK,       /^[\s]*$/ ]
+  [ \SPACE,       /^[\s]+/ ]
+  [ \BLANK,       /^[\s]+$/ ]
+  [ \BLANK,       /^[\s]+\n/ ]
 
 
 
@@ -84,16 +87,20 @@ export const parse = (source) ->
 
   # Debug logger
 
+  dent   = 0
   steps  = []
-  bump   = (c, type) -> steps.push [ \BUMP, "#{lookahead.type} #{white c}" ]
-  debug  = (...args) -> steps.push [ \DEBUG, clean-src args.join ' ' ]
-  error  = (...args) -> steps.push [ \ERROR, clean-src args.join ' ' ]
-  status = -> steps.push [ lookahead, ((yellow clean-src lookahead.value) + clean-src source.slice cursor), peek! ]
+  bump   = (c, type) -> steps.push [ \BUMP, dent, lookahead, c ]
+  debug  = (...args) -> steps.push [ \LOG,  dent, lookahead, clean-src args.join ' ' ]
+  error  = (...args) -> steps.push [ \ERR,  dent, lookahead, clean-src args.join ' ' ]
+  status =           -> steps.push [ \NEW,  dent, lookahead, ilog "#{green \new} #{lookahead.type}(#{yellow clean-src lookahead.value}) <- \"#{yellow clean-src lookahead.value}#{clean-src source.slice cursor}\"" ]
+  ilog   = (...args) -> log ' ' * dent, ...args; return args[0]
 
   wrap = (name, ƒ) -> (...args) ->
-    bump blue \+ + name
+    bump ilog blue \+ + name
+    dent += 1
     result = ƒ ...args
-    bump grey \- + name
+    dent -= 1
+    bump ilog grey \- + name
     return result
 
 
@@ -107,7 +114,7 @@ export const parse = (source) ->
     status!
 
   eat = (type) ->
-    steps.push [ \EAT, type ]
+    steps.push [ \EAT, dent, lookahead, ilog "#{red \eat} #type" ]
 
     token = lookahead
 
@@ -129,9 +136,10 @@ export const parse = (source) ->
         switch type
         | \BLANK, \SPACE, \INDENT => return peek offset + token.length
         | otherwise               => return [ type, token ]
+        return [ type, token ]
 
     if !char
-      error "Char token was '#{typeof! char}' at #{cursor}", source.slice cursor + offset
+      error "Char token was '#{typeof! char}' at #{cursor + offset}", source.slice cursor + offset
     else
       throw error "Unexpected token: `#char`"
 
@@ -142,8 +150,8 @@ export const parse = (source) ->
     cursor := cursor + token.length
 
     switch type
-    | \STRCOM  => Token \STRING, token.trim-left!
-    | _        => Token type, token
+    | \STRCOM => return Token \STRING, token.trim-left!
+    | _       => return Token type, token
 
   read = (ƒ) ->
     i = cursor
@@ -165,7 +173,7 @@ export const parse = (source) ->
 
   is-bool-op = one-of <[ OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE AND OR ]>
   is-math-op = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV ]>
-  is-literal = one-of <[ INTLIKE STRING ]>
+  is-literal = one-of <[ TIMELIKE INTLIKE STRING ]>
   is-bin-op  = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE AND OR ]>
 
 
@@ -179,7 +187,7 @@ export const parse = (source) ->
   Body = wrap \Body ->
     if lookahead.type is \NEWLINE # TODO: Find out how to kill this
       eat \NEWLINE
-    list = []
+    list = [ ]
     while lookahead.type isnt \EOF and lookahead.type isnt \SCOPE_END
       list.push Statement!
     return list
@@ -195,8 +203,11 @@ export const parse = (source) ->
   # Statements
 
   Statement = wrap \Statement ->
+    while lookahead.type is \NEWLINE or lookahead.type is \;
+      eat lookahead.type
+      return Statement!
+
     switch lookahead.type
-    | \;         => EmptyStatement!
     | \IF        => IfStatement!
     | \ATTR      => AttrStatement!
     | \REACH     => DeclarationStatement!
@@ -207,10 +218,9 @@ export const parse = (source) ->
     | \SCOPE_BEG => Scope!
     | _          => ExpressionStatement!
 
-  EmptyStatement = wrap \EmptyStatement -> null
-
   ExpressionStatement = wrap \ExpressionStatement ->
     expr = PrimaryExpression!
+
     switch lookahead.type
     | \NEWLINE   => eat \NEWLINE # This is a TDD prayer, could cause problems
     | \SCOPE_END => eat \SCOPE_END # This is a TDD prayer, could cause problems
@@ -229,7 +239,7 @@ export const parse = (source) ->
     kind: \decl-stmt
     type: type
     reach: reach
-    ident: ident
+    name: ident.name
     value: PrimaryExpression!
 
   IfStatement = wrap \IfStatement ->
@@ -337,9 +347,11 @@ export const parse = (source) ->
   # Expressions
 
   PrimaryExpression = wrap \PrimaryExpression ->
+    if is-literal lookahead.type
+      return Literal!
+
     switch lookahead.type
     | \PAREN_OPEN => ParenExpression!
-    | \RANGE_KEY  => AssignmentExpression!
     | _           => BinaryExpression!
 
   Expression = wrap \Expression ->
@@ -356,10 +368,22 @@ export const parse = (source) ->
     eat \PAREN_CLOSE
     return expr
 
+  UnaryExpression = wrap \UnaryExpression ->
+    oper =
+      switch lookahead.type
+      | \OPER_NOT => oper := eat \OPER_NOT
+      | _         => null
+
+    if oper
+      return do
+        kind: \unary
+        oper: oper
+        main: UnaryExpression!
+    else
+      return LeftHandSideExpression!
+
   BinaryExpression = wrap \BinaryExpression ->
     node = Variable!
-
-    debug \BinaryExpression: peek!
 
     while is-bin-op lookahead.type
       oper = lookahead.type
@@ -432,7 +456,7 @@ export const parse = (source) ->
     name = eat \IDENT
     kind: \ident
     name: name
-    range: \here
+    reach: \here
 
 
   # Init

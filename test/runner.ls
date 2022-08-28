@@ -149,8 +149,8 @@ module.exports = Runner = do ->
   # Interface
   previous: render-after -> current  := limit 0, options.length - 1, current - 1
   next:     render-after -> current  := limit 0, options.length - 1, current + 1
-  mode-dn:  render-after -> mode-ix  := limit 0, MODES.length   - 1, mode-ix - 1
-  mode-up:  render-after -> mode-ix  := limit 0, MODES.length   - 1, mode-ix + 1
+  mode-up:  render-after -> mode-ix  := limit 0, MODES.length   - 1, mode-ix - 1
+  mode-dn:  render-after -> mode-ix  := limit 0, MODES.length   - 1, mode-ix + 1
   set-last: render-after -> current  := options.length - 1
   select:   render-after -> current  := it
   render:   render
