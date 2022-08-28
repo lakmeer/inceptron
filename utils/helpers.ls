@@ -19,5 +19,5 @@ export const head     = -> if it.length then it[0] else null
 export const select   = (it, ƒ) -> head it.filter ƒ
 
 export const header     = -> log "--- #it ---\n"
-export const big-header = -> log "\n=== #it ===\n"
+export const big-header = -> log "\n=== #it\n"
 

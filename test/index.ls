@@ -21,12 +21,16 @@ ExprStmt = ->
   type: \???
   main: it
 
-DeclStmt = (range, type, ident, value) ->
-  kind: \decl-stmt
-  type: type
-  range: range
-  ident: ident
-  value: value
+DeclStmt = (reach, type, ident, value) ->
+  allowed = <[ local share uniq lift const ]>
+  if allowed.includes reach
+    kind:  \decl-stmt
+    type:  type
+    reach: reach
+    ident: ident
+    value: value
+  else
+    throw "Unsupported reach keyword: #reach"
 
 IfStmt = (cond, pass, fail = null) ->
   kind: \if
@@ -104,10 +108,10 @@ Binary = (oper, type, left, right) ->
   left: left
   right: right
 
-Ident = (name, range = \here) ->
+Ident = (name, reach = \here) ->
   kind: \ident
   name: name
-  range: range
+  reach: reach
 
 Assign = (left, right) ->
   kind: \assign
@@ -123,7 +127,7 @@ Assign = (left, right) ->
 export Degenerate =
   src: ""
   val: null
-  ast: Root []
+  ast: Root!
 
 export JustNum =
   src: "69"
@@ -252,6 +256,21 @@ export AssignmentExpression =
 export DeclSingle =
   src: "local Int x = 42"
   ast: Root DeclStmt \local, \Int, (Ident \x), (AutoInt 42)
+
+export ReachKeywords =
+  src: """
+  local Int a = 1
+  share Int b = 2
+  lift  Int c = 3
+  uniq  Int d = 4
+  local Int e = 5
+  """
+  ast: Root do
+    DeclStmt \local, \Int, (Ident \a), (AutoInt 1)
+    DeclStmt \share, \Int, (Ident \b), (AutoInt 2)
+    DeclStmt \lift,  \Int, (Ident \c), (AutoInt 3)
+    DeclStmt \uniq,  \Int, (Ident \d), (AutoInt 2)
+    DeclStmt \local, \Int, (Ident \e), (AutoInt 5)
 
 export BinaryBool =
   src: "2 == 2"

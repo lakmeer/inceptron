@@ -36,14 +36,14 @@ parser-tests = ->
 
     if str.length is 3
       switch str.char-code-at 2
-      | LEFT  => Runner.in!
-      | RIGHT => Runner.out!
-      | DOWN  => Runner.next!
-      | UP    => Runner.previous!
+      | LEFT  => Runner.previous!
+      | RIGHT => Runner.next!
+      | DOWN  => Runner.mode-dn!
+      | UP    => Runner.mode-up!
 
   # Initialise runner with test suite
   Runner.load (require \./test), Parser
-  Runner.set-last!
+  Runner.select 5
 
 
 parser-tests!

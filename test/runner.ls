@@ -1,8 +1,7 @@
 const { log, limit, header, dump, big-header, colors, treediff, any } = require \../utils
-const { magenta, bright, yellow, green, red, grey, plus, minus, white } = colors
+const { blue, magenta, bright, yellow, green, red, grey, plus, minus, white } = colors
 
-modes = [ 0 to 5 ]
-[ NONE, COMPACT, PARSER, PARSER_ALL, DIFF, DIFF_FULL ] = modes
+MODES = <[ Status Ast Parser ParserWithNodes AstDiff ActualExpected ]>
 
 format-step = ([ token, src, peek ], ix) ->
   switch token
@@ -12,6 +11,12 @@ format-step = ([ token, src, peek ], ix) ->
   | \DEBUG => "#{blue    \log} | " + blue src
   | _      => "#{green   \new} | #{bright token.type}(#{yellow token.value}) #{bright \<-} \"#src\""
 
+mode-menu = (mode) ->
+  switch MODES.index-of mode
+  | 0                => white "↓ #mode"
+  | MODES.length - 1 => white "↑ #mode"
+  | _                => white "↕ #mode"
+
 
 #
 # Runner
@@ -19,12 +24,12 @@ format-step = ([ token, src, peek ], ix) ->
 
 module.exports = Runner = do ->
 
-  mode      = DIFF
   examples  = []
-  current   = 0
   options   = []
-  selection = 0
   results   = []
+  mode-ix   = 0
+  current   = 0
+  selection = 0
 
 
   # Processing
@@ -36,9 +41,7 @@ module.exports = Runner = do ->
 
     results :=
       for name, program of examples
-        log \ok, name
         result = Parser.parse program.src
-
         name:   name
         diff:   treediff program.ast, result.output
         steps:  result.steps
@@ -52,16 +55,19 @@ module.exports = Runner = do ->
   # Renderer
 
   render = ->
-    summary   = grey "-"
+    summary   = ""
     selection = options[current]
     program   = examples[selection]
 
+    mode      = MODES[mode-ix]
+
+    summary-only = false
+    first-err-ix = -1
+
     console.clear!
 
-    log "\n\n\n"
-    big-header bright "RUNNING TEST CASES"
 
-    for result in results
+    for result, ix in results
 
       { name, steps, diff, output } = result
 
@@ -69,23 +75,24 @@ module.exports = Runner = do ->
       any-errors = any steps.map ([ type ]) -> type is \ERROR
       passed     = not diff.any and not any-errors
 
+      summary += bright if passed then green ' ◉' else red ' ◯'
+
+      if summary-only then continue
 
       # Readout
-
-      if passed
-        big-header plus name
-        summary += plus  "+"
-      else
-        big-header minus name
-        summary += minus "-"
 
       if not inspecting
         for step in steps when step.0 is \ERROR
           log format-step step
 
       else
+        big-header (bright yellow name) + ' ' + mode-menu mode
+
+        summary-only := true
+        first-err-ix := ix
+
         log white program.src
-        log ""
+        log "\n---\n"
 
         if any-errors
           log minus "Parser errors"
@@ -95,55 +102,56 @@ module.exports = Runner = do ->
           log ""
 
         switch mode
-        | NONE =>
+        | \Status =>
           if passed
-            log bright green \Passed
+            log bright green "Passing"
           else
-            log bright red \Failed
+            log bright red "Failed"
 
-        | COMPACT =>
-          header \Output
+        | \Ast =>
           log dump output, color: on
 
-        | PARSER =>
-          header \Parser
+        | \Parser =>
           for step in steps
             if step.0 isnt \BUMP
               log format-step step
 
-        | PARSER_ALL =>
-          header \ParserWithBumps
+        | \ParserWithNodes =>
           for step in steps
             log format-step step
 
-        | DIFF =>
-          header \Diff
+        | \AstDiff =>
           log diff.summary
 
-        | DIFF_FULL =>
-          header \FullDiff
+        | \ActualExpected =>
           log white \Expected:
-          log green dump program.ast.body
+          log bright green dump program.ast.body
           log ""
           log white \Actual:
-          log red dump output.body
+          log bright red dump output.body
 
-        return \\n + summary
+        | _ => throw "Unsupported view mode: #that"
+
+    return output: summary, err-ix: first-err-ix
 
   render-after = (ƒ) ->
     (...args) ->
-      log \rendering
       ƒ(...args)
-      log render!
+      summary = render!
+      log \\n + summary.output
+      log " " + "  " * summary.err-ix + yellow \▲
 
 
   # Interface
-  previous: render-after -> current  := limit 0, options.length - 1, current - 1
-  next:     render-after -> current  := limit 0, options.length - 1, current + 1
-  in:       render-after -> mode     := limit 0, modes.length   - 1, mode    - 1
-  out:      render-after -> mode     := limit 0, modes.length   - 1, mode    + 1
-  set-last: render-after -> current  := options.length - 1
+  previous: render-after -> current := limit 0, options.length - 1, current - 1
+  next:     render-after -> current := limit 0, options.length - 1, current + 1
+  mode-up:  render-after -> mode-ix := limit 0, MODES.length   - 1, mode-ix - 1
+  mode-dn:  render-after -> mode-ix := limit 0, MODES.length   - 1, mode-ix + 1
+  set-last: render-after -> current := options.length - 1
+  select:   render-after -> current := it
   render:   render
   proess:   process
   load:     load
+
+  MODES: MODES
 

@@ -117,19 +117,21 @@ export const parse = (source) ->
     set-lookahead next!
     return token.value
 
-  peek = ->
-    if cursor >= source.length
+  peek = (offset = 0) ->
+    if cursor + offset >= source.length
       return [ \EOF, "" ]
 
-    char = source[ cursor ]
-    rest = source.slice cursor
+    char = source[ cursor + offset ]
+    rest = source.slice cursor + offset
 
     for [ type, rx ] in TOKEN_MATCHERS
       if token = match-rx rx, rest
-        return [ type, token ]
+        switch type
+        | \BLANK, \SPACE, \INDENT => return peek offset + token.length
+        | otherwise               => return [ type, token ]
 
     if !char
-      error "Char token was '#{typeof! char}' at #{cursor}", source.slice cursor
+      error "Char token was '#{typeof! char}' at #{cursor}", source.slice cursor + offset
     else
       throw error "Unexpected token: `#char`"
 
@@ -140,7 +142,6 @@ export const parse = (source) ->
     cursor := cursor + token.length
 
     switch type
-    | \BLANK, \SPACE, \INDENT => return next!
     | \STRCOM  => return Token \STRING, token.trim-left!
     | _        => return Token type, token
 
@@ -165,7 +166,6 @@ export const parse = (source) ->
   is-bool-op = one-of <[ OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE AND OR ]>
   is-math-op = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV ]>
   is-literal = one-of <[ INTLIKE STRING ]>
-  is-range   = one-of <[ local share uniq lift ]>
   is-bin-op  = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE AND OR ]>
 
 
@@ -179,7 +179,7 @@ export const parse = (source) ->
   Body = wrap \Body ->
     if lookahead.type is \NEWLINE # TODO: Find out how to kill this
       eat \NEWLINE
-    list = [ ]
+    list = []
     while lookahead.type isnt \EOF and lookahead.type isnt \SCOPE_END
       list.push Statement!
     return list
@@ -344,11 +344,7 @@ export const parse = (source) ->
   PrimaryExpression = wrap \PrimaryExpression ->
     switch lookahead.type
     | \PAREN_OPEN => ParenExpression!
-    | \IDENT      =>
-      left = Identifier!
-      switch lookahead.type
-      | \OPER_ASS => PartialAssignmentExpression left
-      | _         => PartialBinaryExpression left
+    | \RANGE_KEY  => AssignmentExpression!
     | _           => BinaryExpression!
 
   Expression = wrap \Expression ->
@@ -366,9 +362,10 @@ export const parse = (source) ->
     return expr
 
   BinaryExpression = wrap \BinaryExpression ->
-    PartialBinaryExpression Variable!
+    node = Variable!
 
-  PartialBinaryExpression = (node) ->
+    debug \BinaryExpression: peek!
+
     while is-bin-op lookahead.type
       oper = lookahead.type
 
