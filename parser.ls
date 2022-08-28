@@ -26,7 +26,6 @@ TOKEN_MATCHERS =
   # Keywords
   [ \IF,          /^if\b/ ]
   [ \ELSE,        /^else\b/ ]
-  [ \RANGE,       /^local\b/ ]
   [ \TRUE,        /^true\b/ ]
   [ \FALSE,       /^false\b/ ]
   [ \NULL,        /^null\b/ ]
@@ -35,6 +34,7 @@ TOKEN_MATCHERS =
   [ \TIMES,       /^times\b/ ]
   [ \OVER,        /^over\b/ ]
   [ \EASE,        /^ease\b/ ]
+  [ \REACH,       /^local|share|uniq|lift|const\b/ ]
   [ \YIELD,       /^yield\b/ ]
 
   # Literals
@@ -142,8 +142,8 @@ export const parse = (source) ->
     cursor := cursor + token.length
 
     switch type
-    | \STRCOM  => return Token \STRING, token.trim-left!
-    | _        => return Token type, token
+    | \STRCOM  => Token \STRING, token.trim-left!
+    | _        => Token type, token
 
   read = (ƒ) ->
     i = cursor
@@ -186,12 +186,8 @@ export const parse = (source) ->
 
   Scope = wrap \Scope ->
     eat \SCOPE_BEG
-    body =
-      switch lookahead.type
-      | \SCOPE_END => eat \SCOPE_END; []
-      | _          => Body!
-    if lookahead.type is \SCOPE_END
-      eat \SCOPE_END
+    body = Body!
+    eat \SCOPE_END
     kind: \scope
     type: \???
     body: body
@@ -203,7 +199,7 @@ export const parse = (source) ->
     | \;         => EmptyStatement!
     | \IF        => IfStatement!
     | \ATTR      => AttrStatement!
-    | \RANGE     => DeclarationStatement!
+    | \REACH     => DeclarationStatement!
     | \TIMES     => RepeatStatement!
     | \OVER      => TimeStatement!
     | \YIELD     => Yield!
@@ -226,14 +222,13 @@ export const parse = (source) ->
     main: expr
 
   DeclarationStatement = wrap \DeclarationStatement ->
-    range = eat \RANGE
+    reach = eat \REACH
     type  = eat \TYPE
     ident = Identifier!
     eat \OPER_EQ
-
     kind: \decl-stmt
     type: type
-    range: range
+    reach: reach
     ident: ident
     value: PrimaryExpression!
 

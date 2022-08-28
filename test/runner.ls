@@ -27,7 +27,7 @@ module.exports = Runner = do ->
   examples  = []
   options   = []
   results   = []
-  mode-ix   = 0
+  mode-ix   = 3
   current   = 0
   selection = 0
 
@@ -58,7 +58,6 @@ module.exports = Runner = do ->
     summary   = ""
     selection = options[current]
     program   = examples[selection]
-
     mode      = MODES[mode-ix]
 
     summary-only = false
