@@ -1,15 +1,25 @@
-const { log, limit, header, dump, big-header, colors, treediff, any } = require \../utils
-const { blue, magenta, bright, yellow, green, red, grey, plus, minus, white } = colors
+const { log, pad, limit, header, dump, big-header, clean-src, colors, treediff, any } = require \../utils
+const { blue, magenta, cyan, bright, yellow, green, red, grey, plus, minus, invert, white } = colors
 
 MODES = <[ Status Ast Parser ParserWithNodes AstDiff ActualExpected ]>
 
-format-step = ([ token, src, peek ], ix) ->
-  switch token
-  | \EAT   => "#{magenta \eat} | " + magenta src
-  | \BUMP  => "#{       "   "} | " + grey src
-  | \ERROR => "#{red     \err} | " + bright src
-  | \DEBUG => "#{blue    \log} | " + blue src
-  | _      => "#{green   \new} | #{bright token.type}(#{yellow token.value}) #{bright \<-} \"#src\""
+margin = 11
+
+format-step = ([ signal, dent, token, src ], ix) ->
+  switch signal
+  | \LOG   => "#{ cyan    pad margin, \debug     } | #{invert src}"
+  | \ERR   => "#{ red     pad margin, \error     } | #{minus src}"
+  | \NEW   => "#{ green   pad margin, token.type } | #{' ' * dent} #{src}"
+  | \EAT   => "#{ magenta pad margin, token.type } | #{' ' * dent} #{src}"
+  | _      => "#{ grey    pad margin, token.type } | #{' ' * dent} #{src}"
+
+compact-step = ([ signal, dent, token, src ], ix) ->
+  switch signal
+  | \LOG   => "#{ blue    pad margin, \debug     } | #{invert src}"
+  | \ERR   => "#{ red     pad margin, \error     } | #{minus src}"
+  | \NEW   => "#{ green   pad margin, token.type } | #{src}"
+  | \EAT   => "#{ magenta pad margin, token.type } | #{src}"
+  | _      => "#{ grey    pad margin, token.type } | #{src}"
 
 mode-menu = (mode) ->
   switch MODES.index-of mode
@@ -18,16 +28,17 @@ mode-menu = (mode) ->
   | _                => white "↕ #mode"
 
 
+
 #
 # Runner
 #
 
 module.exports = Runner = do ->
 
-  examples  = []
   options   = []
   results   = []
-  mode-ix   = 3
+  examples  = []
+  mode-ix   = 0
   current   = 0
   selection = 0
 
@@ -48,7 +59,6 @@ module.exports = Runner = do ->
         input:  program.ast
         output: result.output
 
-    log results
     render!
 
 
@@ -65,47 +75,44 @@ module.exports = Runner = do ->
 
     console.clear!
 
-
     for result, ix in results
 
       { name, steps, diff, output } = result
 
       inspecting = selection is name
-      any-errors = any steps.map ([ type ]) -> type is \ERROR
+      any-errors = any steps.map ([ type ]) -> type is \ERR
       passed     = not diff.any and not any-errors
 
       summary += bright if passed then green ' ◉' else red ' ◯'
 
       if summary-only then continue
 
+
       # Readout
 
-      if not inspecting
-        for step in steps when step.0 is \ERROR
-          log format-step step
-
-      else
-        big-header (bright yellow name) + ' ' + mode-menu mode
+      if inspecting
+        log white program.src
+        log "\n---\n"
 
         summary-only := true
         first-err-ix := ix
 
-        log white program.src
-        log "\n---\n"
+        big-header (bright yellow name) + ' ' + mode-menu mode
 
         if any-errors
           log minus "Parser errors"
           log ""
-        else if diff.any
+
+        if diff.any
           log minus "AST Mismatch"
           log ""
 
         switch mode
         | \Status =>
           if passed
-            log bright green "Passing"
+            log bright green \Pass
           else
-            log bright red "Failed"
+            log bright red \Fail
 
         | \Ast =>
           log dump output, color: on
@@ -113,7 +120,7 @@ module.exports = Runner = do ->
         | \Parser =>
           for step in steps
             if step.0 isnt \BUMP
-              log format-step step
+              log compact-step step
 
         | \ParserWithNodes =>
           for step in steps
@@ -129,8 +136,6 @@ module.exports = Runner = do ->
           log white \Actual:
           log bright red dump output.body
 
-        | _ => throw "Unsupported view mode: #that"
-
     return output: summary, err-ix: first-err-ix
 
   render-after = (ƒ) ->
@@ -138,16 +143,16 @@ module.exports = Runner = do ->
       ƒ(...args)
       summary = render!
       log \\n + summary.output
-      log " " + "  " * summary.err-ix + yellow \▲
+      log " " + "  " * summary.err-ix + yellow \^
 
 
   # Interface
-  previous: render-after -> current := limit 0, options.length - 1, current - 1
-  next:     render-after -> current := limit 0, options.length - 1, current + 1
-  mode-up:  render-after -> mode-ix := limit 0, MODES.length   - 1, mode-ix - 1
-  mode-dn:  render-after -> mode-ix := limit 0, MODES.length   - 1, mode-ix + 1
-  set-last: render-after -> current := options.length - 1
-  select:   render-after -> current := it
+  previous: render-after -> current  := limit 0, options.length - 1, current - 1
+  next:     render-after -> current  := limit 0, options.length - 1, current + 1
+  mode-dn:  render-after -> mode-ix  := limit 0, MODES.length   - 1, mode-ix - 1
+  mode-up:  render-after -> mode-ix  := limit 0, MODES.length   - 1, mode-ix + 1
+  set-last: render-after -> current  := options.length - 1
+  select:   render-after -> current  := it
   render:   render
   proess:   process
   load:     load
