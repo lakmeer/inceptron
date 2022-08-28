@@ -1,5 +1,5 @@
-const { log, pad, limit, header, dump, big-header, clean-src, colors, treediff, any } = require \../utils
-const { blue, magenta, cyan, bright, yellow, green, red, grey, plus, minus, invert, white } = colors
+const { log, pad, pad-end, limit, header, dump, big-header, clean-src, colors, treediff, any } = require \../utils
+const { blue, magenta, cyan, bright, yellow, green, red, grey, plus, minus, invert, white, color } = colors
 
 MODES = <[ Status Ast Parser ParserWithNodes AstDiff ActualExpected ]>
 
@@ -23,10 +23,9 @@ compact-step = ([ signal, dent, token, src ], ix) ->
 
 mode-menu = (mode) ->
   switch MODES.index-of mode
-  | 0                => white "↓ #mode"
-  | MODES.length - 1 => white "↑ #mode"
-  | _                => white "↕ #mode"
-
+  | 0                =>  white (pad-end 18, mode) + "↓ "
+  | MODES.length - 1 =>  white (pad-end 18, mode) + "↑ "
+  | _                =>  white (pad-end 18, mode) + "↕ "
 
 
 #
@@ -38,7 +37,7 @@ module.exports = Runner = do ->
   options   = []
   results   = []
   examples  = []
-  mode-ix   = 0
+  mode-ix   = 5
   current   = 0
   selection = 0
 
@@ -91,13 +90,14 @@ module.exports = Runner = do ->
       # Readout
 
       if inspecting
+        pass-text = bright if passed then green \Passed else red \Failed
+        big-header (bright yellow name) + ' • ' + pass-text + ' • ' + mode-menu mode
+
         log white program.src
         log "\n---\n"
 
         summary-only := true
         first-err-ix := ix
-
-        big-header (bright yellow name) + ' ' + mode-menu mode
 
         if any-errors
           log minus "Parser errors"
@@ -109,10 +109,6 @@ module.exports = Runner = do ->
 
         switch mode
         | \Status =>
-          if passed
-            log bright green \Pass
-          else
-            log bright red \Fail
 
         | \Ast =>
           log dump output, color: on
@@ -143,7 +139,7 @@ module.exports = Runner = do ->
       ƒ(...args)
       summary = render!
       log \\n + summary.output
-      log " " + "  " * summary.err-ix + yellow \^
+      log " " + "  " * summary.err-ix + yellow \▲
 
 
   # Interface

@@ -43,7 +43,7 @@ parser-tests = ->
 
   # Initialise runner with test suite
   Runner.load (require \./test), Parser
-  Runner.select 5
+  Runner.select 9
 
 
 parser-tests!

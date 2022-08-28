@@ -9,12 +9,12 @@ const treediff = require \./treediff
 
 # Re-export
 
-const { log, nop, select, header, big-header, readfile, undef, def, join, defer, pad, any, all, limit } = helpers
+const { log, nop, select, header, big-header, readfile, undef, def, join, defer, pad, pad-end, any, all, limit } = helpers
 
 export dump
 export colors
 export treediff
-export log, nop, select, header, big-header, readfile, undef, def, join, defer, pad, any, all, limit
+export log, nop, select, header, big-header, readfile, undef, def, join, defer, pad, pad-end, any, all, limit
 
 
 # TimeVal - turns HMS values into milliseconds

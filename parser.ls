@@ -124,22 +124,24 @@ export const parse = (source) ->
     set-lookahead next!
     return token.value
 
-  peek = (offset = 0) ->
-    if cursor + offset >= source.length
+  peek =  ->
+    if cursor >= source.length
       return [ \EOF, "" ]
 
-    char = source[ cursor + offset ]
-    rest = source.slice cursor + offset
+    char = source[ cursor ]
+    rest = source.slice cursor
 
     for [ type, rx ] in TOKEN_MATCHERS
       if token = match-rx rx, rest
         switch type
-        | \BLANK, \SPACE, \INDENT => return peek offset + token.length
+        | \BLANK, \SPACE, \INDENT =>
+          cursor := cursor + token.length
+          return peek!
         | otherwise               => return [ type, token ]
         return [ type, token ]
 
     if !char
-      error "Char token was '#{typeof! char}' at #{cursor + offset}", source.slice cursor + offset
+      error "Char token was '#{typeof! char}' at #{cursor}", source.slice cursor
     else
       throw error "Unexpected token: `#char`"
 
@@ -383,7 +385,7 @@ export const parse = (source) ->
       return LeftHandSideExpression!
 
   BinaryExpression = wrap \BinaryExpression ->
-    node = Variable!
+    node = LeftHandSideExpression!
 
     while is-bin-op lookahead.type
       oper = lookahead.type
@@ -395,10 +397,13 @@ export const parse = (source) ->
         left: node
         right: PrimaryExpression!
 
-      if is-bool-op oper
-        node.type = \AutoBool
-      else if node.left.type is node.right.type
-        node.type = node.left.type
+      if node isnt null
+        if is-bool-op oper
+          node.type = \AutoBool
+        else if node.left.type is node.right.type
+          node.type = node.left.type
+      else
+        error "BinaryExpression: LHS node is null"
 
     return node
 
