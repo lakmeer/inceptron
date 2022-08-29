@@ -27,7 +27,7 @@ TOKEN_MATCHERS =
   [ \IF,          /^if\b/ ]
   [ \ELSE,        /^else\b/ ]
   [ \NULL,        /^null\b/ ]
-  [ \TIMES,       /^times\b/ ]
+  [ \REPEAT       /^(times|forever)\b/ ]
   [ \OVER,        /^over\b/ ]
   [ \REACH,       /^(local|share|uniq|lift|const)\b/ ]
   [ \EASE,        /^ease\b/ ]
@@ -222,7 +222,7 @@ export const parse = (source) ->
     | \IF        => IfStatement!
     | \ATTR      => AttrStatement!
     | \REACH     => DeclarationStatement!
-    | \TIMES     => RepeatStatement!
+    | \REPEAT    => RepeatStatement!
     | \OVER      => TimeStatement!
     | \YIELD     => Yield!
     | \TREENODE  => TreeNode!
@@ -275,9 +275,9 @@ export const parse = (source) ->
     fail: fail
 
   RepeatStatement = wrap \RepeatStatement ->
-    eat \TIMES
+    keyword = eat \REPEAT
     kind: \repeat
-    count: PrimaryExpression!
+    count: if keyword is \forever then \forever else PrimaryExpression!
     main: Scope!
 
   TimeStatement = wrap \TimeStatement ->
@@ -373,14 +373,15 @@ export const parse = (source) ->
   # Expressions
 
   PrimaryExpression = wrap \PrimaryExpression ~>
+    if lookahead.type is \PAREN_OPEN
+      return ParenExpression!
+
     if is-bin-op peek!type
       return BinaryExpression!
 
     if peek!type is \OPER_ASS
       return AssignmentExpression!
 
-    if lookahead.type is \OPER_NOT
-      return UnaryExpression!
 
     if lookahead.type is \IDENT
       return Identifier!
@@ -392,11 +393,12 @@ export const parse = (source) ->
       return Literal!
 
     switch lookahead.type
-    | \IDENT      => AssignmentExpression!
+    | \PAREN_OPEN => ParenExpression!
+    | \IDENT      => BinaryExpression!
     | \INTLIKE    => BinaryExpression!
     | \STRING     => Literal!
-    | \PAREN_OPEN => ParenExpression!
     | \SYMBOL     => Symbol!
+    | \OPER_NOT   => UnaryExpression!
     | _           => debug "No expression for type #that"; eat that; null
 
   ParenExpression = wrap \ParenExpression ->

@@ -526,127 +526,37 @@ export ExampleProgram =
         AttrStmt Attr \visible, (AutoBool true)
         TreeNode \Text, (Ident \txt)
 
-/*
+
 export ForeverProgram =
   src: """
   " Simple Forever Program
 
   local Int x = 0
 
-  times 5
+  times 5 {
     x := x + 1
-    <Text "Hello Sailor"
+    <Text "Hello, Sailor"
     <Text x
+  }
 
-  forever
+  forever {
     x := x + 1
 
     <Box
       :attribute x
   """
   ast:
-    kind: \scope
-    type: \Root
-    main: null
-    args: []
-    body:
-      * kind: \literal
-        type: \Str
-        main: " Simple Forever Program"
+    Root do
+      ExprStmt AutoStr " Simple Forever Program"
+      DeclStmt \local \Int \x, (AutoInt 0)
+      RepeatStmt (AutoInt 5),
+        Scope do
+          Assign \x, (Ident \x), (AutoInt 1)
+          TreeNode \Text, AutoStr "Hello, Sailor"
+          TreeNode \Text, Ident \x
+      RepeatStmt \forever,
+          Scope do
+            Assign \x, (Ident \x), (AutoInt 1)
+            TreeNode \Box, null,
+              AttrStmt Attr \attribute, (Ident \x)
 
-      * kind: \decl
-        reach: \local
-        type: \Int
-        name: \x
-        main:
-          kind: \literal
-          type: \Int
-          main: 0
-
-      * kind: \timing
-        type: \times
-        freq: 5
-        over: 0
-        ease: null
-        main:
-          kind: \scope
-          type: \None
-          args: []
-          main: null
-          body:
-            * kind: \assign
-              name: \x
-              reach: \here
-              main:
-                kind: \binary
-                type: \Int
-                oper: \+
-                left:
-                  kind: \ident
-                  name: \x
-                  reach: \here
-                right:
-                  kind: \literal
-                  type: \AutoInt
-                  main: 1
-
-            * kind: \scope
-              type: \Text
-              args: []
-              main: null
-              body:
-                * kind: \literal
-                  type: \AutoStr
-                  main: "Hello Sailor"
-                ...
-            * kind: \scope
-              type: \Text
-              args: []
-              main: null
-              body:
-                * kind: \ident
-                  name: \x
-                  type: \Int
-                ...
-            ...
-
-      * kind: \timing
-        type: \forever
-        freq: 0
-        over: 0
-        ease: null
-        main:
-          kind: \scope
-          main: null
-          args: []
-          body:
-            * kind: \assign
-              name: \x
-              reach: \here
-              main:
-                kind: \binary
-                type: \Int
-                oper: \+
-                left:
-                  kind: \ident
-                  name: \x
-                  reach: \here
-                right:
-                  kind: \literal
-                  type: \AutoInt
-                  main: 1
-
-            * kind: \scope
-              type: \Box
-              args: []
-              main: null
-              body:
-                * kind: \attr
-                  name: \attribute
-                  args:
-                    * kind: \ident
-                      name: \x
-                      reach: \here
-                    ...
-                ...
-                */
