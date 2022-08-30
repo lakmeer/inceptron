@@ -1,4 +1,8 @@
 
+//
+// ANSI Colour Helpers
+//
+
 const ansi = (n) => "\u001b["+ n + "m"
 
 const color = (...mods) => (txt) => mods.map(ansi).join('') + txt + ansi(0)

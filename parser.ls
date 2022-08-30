@@ -1,89 +1,88 @@
 
 # Helpers
 
-{ log, nop, parse-time, any, dump, colors, treediff, truncate } = require \./utils
+{ log, pad, parse-time, colors, treediff, truncate, clean-src, take } = require \./utils
 { treediff, any-diffs } = treediff
 { color, bright, grey, red, yellow, green, blue, magenta, white, plus, minus, invert } = colors
 
-const clean-src = (txt, c=on) -> txt.replace /\n/g, if c then bright blue \⏎ else nop \⏎
+{ TAGS, MATCHLIST, is-bool-op, is-binary-op, is-assign-op, is-literal } = require \./token-specs
 
-
-#
-# Token Matchers
-#
-
-TOKEN_MATCHERS =
-  [ \NEWLINE,     /^\n/ ]
-  [ \;,           /^;\n?/ ]
-
-  # Grouping
-  [ \SCOPE_BEG,   /^{/ ]
-  [ \SCOPE_END,   /^}/ ]
-  [ \PAREN_OPEN,  /^\(/ ]
-  [ \PAREN_CLOSE, /^\)/ ]
-  [ \COMMA,       /^,/ ]
-
-  # Keywords
-  [ \IF,          /^if\b/ ]
-  [ \ELSE,        /^else\b/ ]
-  [ \NULL,        /^null\b/ ]
-  [ \REPEAT       /^(times|forever)\b/ ]
-  [ \OVER,        /^over\b/ ]
-  [ \REACH,       /^(local|share|uniq|lift|const)\b/ ]
-  [ \EASE,        /^ease\b/ ]
-  [ \YIELD,       /^yield\b/ ]
-
-  # Literals
-  [ \TIMELIKE,    /^([\d]+h)?([\d]+m)?([\d]+s)?([\d]+ms)?\b/ ]
-  [ \ATTR,        /^:[\w]+/ ]
-  [ \SUBATTR,     /^::[\w]+/ ]
-  [ \TREENODE,    /^<[\w]+\b/ ]
-  [ \INTLIKE,     /^[\d]+/ ]
-  [ \SYMBOL,      /^`\w+/ ]
-  [ \BOOL,        /^(true|false)\b/ ]
-  [ \STRING,      /^"[^"\n]*"/ ]
-  [ \STRCOM,      /^"[^"\n]*$/ ]
-  [ \STRCOM,      /^"[^"\n]*/ ]
-
-  # Operators
-  [ \OPER_NOT,    /^!/ ]
-  [ \OPER_ADD,    /^[\+]/ ]
-  [ \OPER_SUB,    /^[\-]/ ]
-  [ \OPER_MUL,    /^[\*]/ ]
-  [ \OPER_DIV,    /^[\/]/ ]
-  [ \OPER_ASS,    /^:=/ ]
-  [ \OPER_EQUIV,  /^==/ ]
-  [ \OPER_EQ,     /^=/ ]
-  [ \OPER_GTE,    /^<=/ ]
-  [ \OPER_GT,     /^</ ]
-  [ \OPER_LTE,    /^>=/ ]
-  [ \OPER_LT,     /^>/ ]
-  [ \OPER_AND,    /^and\b/ ]
-  [ \OPER_OR,     /^or\b/ ]
-  [ \OPER_NOT,    /^not\b/ ]
-
-  # Identifiers
-  [ \TYPE,        /^[A-Z]\w+(`s)?/ ]
-  [ \IDENT,       /^\w+/ ]
-
-  # Whitespace
-  [ \SPACE,       /^[\s]+/ ]
-  [ \BLANK,       /^[\s]+$/ ]
-  [ \BLANK,       /^[\s]+\n/ ]
-
+const $ = TAGS
+const trunc = (n, txt) -> truncate n, (grey \...), (grey \:EOF), txt
 
 
 # Token value is ALWAYS a string. Any post-processing goes in the
 # parser function that turns this token into an AST node.
 
-Token = (type, value) -> { type, value, length: value.length }
+Token = (type, value, start = 0, end = 0, line = 0) ->
+  { type, start, end, line, value, length: value?.length }
 
 
 #
-# Core Parse Function
+# Tokeniser
+#
+
+export const tokenise = (source) ->
+
+  cursor = 0
+  line   = 0
+
+
+  #
+  # Functions
+  #
+
+  match-rx = (regex) ->
+    matched = regex.exec source.slice cursor
+    return null if matched is null
+    return matched.0
+
+  read = ->
+    if cursor >= source.length
+      return Token $.EOF, ""
+
+    for [ type, rx ] in MATCHLIST
+      if str = match-rx rx, source.slice cursor
+        cursor := cursor + str.length
+
+        switch type
+        | $.BLANK, $.SPACE, $.INDENT => return read!
+        | $.STRCOM                   => return Token $.STRING, str.trim-left!
+        | otherwise                  => return Token type, str
+
+    return Token $.UNKNOWN, source[cursor]
+
+
+  # Init
+
+  f      = 0
+  tokens = []
+
+  log \\n + (bright blue source) + \\n
+
+  while f < 1000
+    f := f + 1
+    next = read!
+
+    log (white pad 10, next.type), (grey '<-'),
+      trunc 50, (yellow clean-src next.value) + clean-src source.slice cursor
+
+    tokens.push next
+    break if tokens[*-1].type is $.EOF
+
+  log ""
+
+  return tokens
+
+
+#
+# Parser
 #
 
 export const parse = (source) ->
+
+  tokens = tokenise source
+
 
   #
   # Debug logger
@@ -92,11 +91,12 @@ export const parse = (source) ->
   dent   = 0
   steps  = []
   ilog   = (...args) -> log ' ' * dent, ...args; return args[0]
-  bump   = (c, type) -> steps.push [ \BUMP, dent, lookahead, c ]
-  debug  = (...args) -> steps.push [ \LOG,  dent, lookahead, ilog invert clean-src args.join ' ' ]
-  error  = (...args) -> steps.push [ \ERR,  dent, lookahead, ilog minus clean-src args.join ' ' ]
-  status = -> steps.push [ \NEW,  dent, lookahead,
-    ilog "#{green \new} #{lookahead.type} <- #{yellow clean-src lookahead.value, false}#{clean-src truncate 14, \..., source.slice cursor}" ]
+  bump   = (c, type) -> steps.push [ \BUMP, dent, next, c ]
+  debug  = (...args) -> steps.push [ \LOG,  dent, next, ilog invert clean-src args.join ' ' ]
+  error  = (...args) -> steps.push [ \ERR,  dent, next, ilog minus  clean-src args.join ' ' ]
+  status =           -> steps.push [ \NEW,  dent, next, ilog "#{bright green \new} #{bright str-token next} <- #{(take 4 tokens).map str-token .join ' '}" ]
+
+  str-token = (token) -> "[#{token.type}:#{yellow clean-src token.value}]"
 
   wrap = (name, ƒ) -> (...args) ->
     bump ilog blue \+ + name
@@ -108,81 +108,36 @@ export const parse = (source) ->
 
 
   #
-  # Tokeniser
+  # Token Sequence
   #
 
-  cursor    = 0
-  lookahead = null
-
-  set-lookahead = (token) ->
-    lookahead := token
-    status!
+  next = null
 
   eat = (type) ->
-    steps.push [ \EAT, dent, lookahead, ilog "#{red \eat} #type" ]
+    if typeof type is \symbol
+      type := TAGS[type]
 
-    token = lookahead
+    steps.push [ \EAT, dent, next, ilog "#{red \eat} #type" ]
 
-    if token.type isnt type
-      error "Unexpected token (expected '#type', got #{token.type})"
+    if next.type isnt type
+      error "Unexpected token (expected '#type', got #{next.type})"
 
-    set-lookahead next!
-    return token.value
+    value = next.value
+    next := if tokens.length then tokens.shift! else Token \EOF, ""
+    status!
 
-  peek = (d = 0) ->
-    if cursor >= source.length
-      return Token \EOF, ""
+    return value
 
-    char = source[ cursor ]
-    rest = source.slice cursor
-
-    for [ type, rx ] in TOKEN_MATCHERS
-      if token = match-rx rx, rest
-        switch type
-        | \BLANK, \SPACE, \INDENT =>
-          cursor := cursor + token.length
-          return peek d + 1
-        | _ =>
-          return Token type, token
-
-    if !char
-      error "Char token was '#{typeof! char}' at #{cursor}", source.slice cursor
+  peek = (n) ->
+    if tokens.length > n - 1
+      tokens[n - 1].type
     else
-      throw error "Unexpected token: `#char`"
-
-    return Token \UNKNOWN, char
-
-  next = ->
-    token = peek!
-    cursor := cursor + token.length
-
-    if token.type is \STRCOM
-      Token \STRING, token.value.trim-left!
-    else
-      token
-
-  read = (ƒ) ->
-    i = cursor
-    while (ƒ source[cursor]) and (cursor < source.length)
-      cursor := cursor + 1
-    return source.slice i, cursor
-
-  match-rx = (regex) ->
-    matched = regex.exec source.slice cursor
-    return null if matched is null
-    return matched.0
+      \EOF
 
   check-valid-assign = (node) ->
     if node.kind is \ident
       return node.name
     error "Can't assign to non-identifier"
-
-  one-of = (types) -> -> types.includes it
-
-  is-bool-op = one-of <[ OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE OPER_AND OPER_OR ]>
-  is-math-op = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV ]>
-  is-literal = one-of <[ TIMELIKE INTLIKE STRING BOOL SYMBOL ]>
-  is-bin-op  = one-of <[ OPER_ADD OPER_SUB OPER_MUL OPER_DIV OPER_EQUIV OPER_GT OPER_GTE OPER_LT OPER_LTE OPER_AND OPER_OR ]>
 
 
   #
@@ -195,17 +150,18 @@ export const parse = (source) ->
     body: Body!
 
   Body = wrap \Body ->
-    if lookahead.type is \NEWLINE # TODO: Find out how to kill this
-      eat \NEWLINE
-    list = [ ]
-    while lookahead.type isnt \EOF and lookahead.type isnt \SCOPE_END
+    if next.type is $.NEWLINE
+      eat $.NEWLINE
+    list = []
+    while next.type isnt $.EOF and next.type isnt $.SCOPE_END
       list.push Statement!
+      log \WHILE_BODY yellow next.type
     return list
 
   Scope = wrap \Scope ->
-    eat \SCOPE_BEG
+    eat $.SCOPE_BEG
     body = Body!
-    if lookahead.type isnt \EOF then eat \SCOPE_END
+    if next.type isnt $.EOF then eat $.SCOPE_END
     kind: \scope
     type: \???
     body: body
@@ -214,57 +170,57 @@ export const parse = (source) ->
   # Statements
 
   Statement = wrap \Statement ->
-    while lookahead.type is \NEWLINE or lookahead.type is \;
-      eat lookahead.type
-      return Statement!
+    while next.type is $.NEWLINE or next.type is $.SEMICOLON
+      eat next.type
 
-    switch lookahead.type
-    | \IF        => IfStatement!
-    | \ATTR      => AttrStatement!
-    | \REACH     => DeclarationStatement!
-    | \REPEAT    => RepeatStatement!
-    | \OVER      => TimeStatement!
-    | \YIELD     => Yield!
-    | \TREENODE  => TreeNode!
-    | \SCOPE_BEG => Scope!
-    | _          => ExpressionStatement!
+    if (peek 1) is $.OP_ASSIGN then
+      return AssignmentExpression!
+
+    switch next.type
+    | $.IF        => IfStatement!
+    | $.ATTR      => AttrStatement!
+    | $.REACH     => DeclarationStatement!
+    | $.REPEAT    => RepeatStatement!
+    | $.OVER      => TimeStatement!
+    | $.YIELD     => Yield!
+    | $.TREENODE  => TreeNode!
+    | $.SCOPE_BEG => Scope!
+    | _           => ExpressionStatement!
 
   ExpressionStatement = wrap \ExpressionStatement ->
     expr = PrimaryExpression!
 
-    switch lookahead.type
-    | \NEWLINE   => eat \NEWLINE # This is a TDD prayer, could cause problems
-    | \SCOPE_END => eat \SCOPE_END # This is a TDD prayer, could cause problems
-    | \EOF       => eat \EOF
-    | \;         => eat \;
-    | _          => eat \;
+    switch next.type
+    | $.NEWLINE   => eat $.NEWLINE # This is a TDD prayer, could cause problems
+    | $.SCOPE_END => eat $.SCOPE_END # This is a TDD prayer, could cause problems
+    | $.EOF       => eat $.EOF
+    | _           => eat $.SEMICOLON
     kind: \expr-stmt
     type: \???
     main: expr
 
   DeclarationStatement = wrap \DeclarationStatement ->
-    reach = eat \REACH
-    type  = eat \TYPE
+    reach = eat $.REACH
+    type  = eat $.TYPE
     ident = Identifier!
-    eat \OPER_EQ
+    eat $.OP_EQ
     kind:  \decl-stmt
     type:  type
-    reach: reach
     name:  ident.name
+    reach: reach
     value: PrimaryExpression!
 
   IfStatement = wrap \IfStatement ->
-    eat \IF
+    eat $.IF
     cond = BinaryExpression!
     pass = Scope!
-
     fail = null
 
-    if lookahead.type is \NEWLINE
-      eat \NEWLINE
-    if lookahead.type is \ELSE
-      eat \ELSE
-      if lookahead.type is \SCOPE_BEG
+    if next.type is $.NEWLINE
+      eat $.NEWLINE
+    if next.type is $.ELSE
+      eat $.ELSE
+      if next.type is $.SCOPE_BEG
         fail := Scope!
       else
         fail := BinaryExpression!
@@ -275,22 +231,24 @@ export const parse = (source) ->
     fail: fail
 
   RepeatStatement = wrap \RepeatStatement ->
-    keyword = eat \REPEAT
+    keyword = eat $.REPEAT
     kind: \repeat
     count: if keyword is \forever then \forever else PrimaryExpression!
     main: Scope!
 
   TimeStatement = wrap \TimeStatement ->
-    eat \OVER
+    eat $.OVER
+    span = TimeLiteral!
+    ease = null
+
+    if next.type is $.EASE
+      eat $.EASE
+      ease := PrimaryExpression!
+
     kind: \time
     type: \over
-    span: TimeLiteral!
-    ease:
-      if lookahead.type is \EASE
-        eat \EASE
-        PrimaryExpression!
-      else
-        null
+    span: span
+    ease: ease
     main: Scope!
 
   AttrStatement = wrap \AttrStatement ->
@@ -299,7 +257,7 @@ export const parse = (source) ->
     attr: Attribute!
 
   Yield = wrap \Yield ->
-    eat \YIELD
+    eat $.YIELD
     kind: \yield
     main: PrimaryExpression!
 
@@ -307,17 +265,18 @@ export const parse = (source) ->
   # TreeNodes
 
   TreeNode = wrap \TreeNode ->
-    type = eat \TREENODE .slice 1
+    type = eat $.TREENODE .slice 1
     main = null
     args = []
 
-    if lookahead.type isnt \NEWLINE and lookahead.type isnt \EOF
-      if peek!type isnt \OPER_EQ
+    if next.type isnt $.NEWLINE and next.type isnt $.EOF
+      if (peek 1) isnt $.OP_EQ
         main := Expression!
       args := TreePropList!
 
     body = Body!
 
+    # Bump first body entry to main if it's appropriate
     if body.length is 1 and body[*-1].kind is \expr-stmt
       body[*-1] = body[*-1].main
 
@@ -327,15 +286,15 @@ export const parse = (source) ->
     args: args
     body: body
 
-  TreePropList = wrap \TreeArgsList ->
+  TreePropList = wrap \TreePropList ->
     args = []
-    while lookahead.type is \IDENT
+    while next.type is $.IDENT
       args.push TreeProperty!
     return args
 
   TreeProperty = wrap \TreeProperty ->
-    name = eat \IDENT
-    eat \OPER_EQ
+    name = eat $.IDENT
+    eat $.OP_EQ
     value = PrimaryExpression!
     kind: \tree-prop
     type: value?.type or \???
@@ -346,71 +305,62 @@ export const parse = (source) ->
   # Attributes
 
   Attribute = wrap \Attribute ->
-    name = (eat \ATTR).slice 1
+    name = (eat $.ATTR).slice 1
     args = AttrArgsList!
     kind: \attr
     name: name
     args: args
 
   SubAttribute = wrap \SubAttribute ->
-    name = (eat \SUBATTR).slice 2
+    name = (eat $.SUBATTR).slice 2
     kind: \sub-attr
     name: name
     value: PrimaryExpression!
 
   AttrArgsList = wrap \AttrArgsList ->
     args = [ AttrArgument! ]
-    while lookahead.type isnt \EOF and lookahead.type isnt \NEWLINE
+    while next.type isnt $.EOF and next.type isnt $.NEWLINE
       args.push AttrArgument!
     return args
 
   AttrArgument = wrap \AttrArgument ->
-    switch lookahead.type
-    | \SUBATTR => SubAttribute!
+    switch next.type
+    | $.SUBATTR => SubAttribute!
     | _        => Expression!
 
 
   # Expressions
 
   PrimaryExpression = wrap \PrimaryExpression ~>
-    if lookahead.type is \PAREN_OPEN
-      return ParenExpression!
-
-    if is-bin-op peek!type
-      return BinaryExpression!
-
-    if peek!type is \OPER_ASS
-      return AssignmentExpression!
-
-
-    if lookahead.type is \IDENT
-      return Identifier!
-
-    return Expression!
+    switch true
+    | next.type is $.PAR_OPEN => ParenExpression!
+    | is-assign-op (peek 1)   => AssignmentExpression!
+    | is-binary-op (peek 1)   => BinaryExpression!
+    | next.type is $.IDENT    => Identifier!
+    | _                       => Expression!
 
   Expression = wrap \Expression ->
-    if is-literal lookahead.type
-      return Literal!
+    return Literal! if is-literal next.type
 
-    switch lookahead.type
-    | \PAREN_OPEN => ParenExpression!
-    | \IDENT      => BinaryExpression!
-    | \INTLIKE    => BinaryExpression!
-    | \STRING     => Literal!
-    | \SYMBOL     => Symbol!
-    | \OPER_NOT   => UnaryExpression!
-    | _           => debug "No expression for type #that"; eat that; null
+    switch next.type
+    | $.OP_NOT   => UnaryExpression!
+    | $.PAR_OPEN => ParenExpression!
+    | $.IDENT    => BinaryExpression!
+    | $.INTLIKE  => BinaryExpression!
+    | $.STRING   => Literal!
+    | $.SYMBOL   => Symbol!
+    | _          => debug "No expression for type #that"; eat that; null
 
   ParenExpression = wrap \ParenExpression ->
-    eat \PAREN_OPEN
+    eat $.PAR_OPEN
     expr = Expression!
-    eat \PAREN_CLOSE
+    eat $.PAR_CLOSE
     return expr
 
   UnaryExpression = wrap \UnaryExpression ->
     oper =
-      switch lookahead.type
-      | \OPER_NOT => oper := eat \OPER_NOT
+      switch next.type
+      | $.OP_NOT => oper := eat $.OP_NOT
       | _         => null
 
     if oper
@@ -425,13 +375,13 @@ export const parse = (source) ->
   BinaryExpression = wrap \BinaryExpression ->
     node = LeftHandSideExpression!
 
-    while is-bin-op lookahead.type
-      oper = lookahead.type
+    while is-binary-op next.type
+      oper = next.type
 
       node :=
         kind: \binary
         type: \AutoNum
-        oper: eat lookahead.type
+        oper: eat next.type
         left: node
         right: PrimaryExpression!
 
@@ -448,10 +398,10 @@ export const parse = (source) ->
   AssignmentExpression = wrap \AssignmentExpression ->
     left = LeftHandSideExpression!
 
-    if lookahead.type isnt \OPER_ASS
+    if next.type isnt $.OP_ASSIGN
       return left
 
-    eat \OPER_ASS
+    eat $.OP_ASSIGN
     right = BinaryExpression!
 
     kind:  \assign
@@ -460,58 +410,59 @@ export const parse = (source) ->
     right: right
 
   LeftHandSideExpression = wrap \LeftHandSideExpression ->
-    if is-literal lookahead.type
+    if is-literal next.type
       Literal!
     else
       Identifier!
 
+
   # Leaves
 
   Variable = wrap \Variable ->
-    switch lookahead.type
-    | \IDENT => Identifier!
+    switch next.type
+    | $.IDENT => Identifier!
     | _      => Literal!
 
   Literal = wrap \Literal ->
-    switch lookahead.type
-    | \TIMELIKE => TimeLiteral!
-    | \INTLIKE  => NumericLiteral!
-    | \BOOL     => BooleanLiteral!
-    | \STRING   => StringLiteral!
-    | \SYMBOL   => Symbol!
-    | _         => eat lookahead.type; null
+    switch next.type
+    | $.TIMELIKE => TimeLiteral!
+    | $.INTLIKE  => NumericLiteral!
+    | $.BOOL     => BooleanLiteral!
+    | $.STRING   => StringLiteral!
+    | $.SYMBOL   => Symbol!
+    | _         => eat next.type; null
 
   Symbol = wrap \Symbol ->
-    if eat \SYMBOL
+    if eat $.SYMBOL
       kind: \symbol
       name: that.slice 1
 
   BooleanLiteral = wrap \BooleanLiteral ->
-    if eat \BOOL
+    if eat $.BOOL
       kind: \literal
       type: \AutoBool
       value: that is \true
 
   TimeLiteral = wrap \TimeLiteral ->
-    if eat \TIMELIKE
+    if eat $.TIMELIKE
       kind: \literal
       type: \AutoTime
       value: parse-time that
 
   NumericLiteral = wrap \NumericLiteral ->
-    if eat \INTLIKE
+    if eat $.INTLIKE
       kind: \literal
       type: \AutoInt
       value: parse-int that
 
   StringLiteral = wrap \StringLiteral ->
-    if eat \STRING
+    if eat $.STRING
       kind: \literal
       type: \AutoStr
       value: that.replace /^"/, '' .replace /"$/, ''
 
   Identifier = wrap \Identifier ->
-    name = eat \IDENT
+    name = eat $.IDENT
     kind: \ident
     name: name
     reach: \here
@@ -519,11 +470,14 @@ export const parse = (source) ->
 
   # Init
 
-  set-lookahead Token \SOF, ""
-  set-lookahead next!
+  log tokens.map (.type |> yellow)
+  log ""
 
+  token-list = [ it for it in tokens ]
+  next := tokens.shift!
+  status!
   output = Root!
 
-  return { output, steps }
+  return { output, steps, token-list }
 
 

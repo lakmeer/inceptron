@@ -1,25 +1,25 @@
 const { log, pad, pad-end, select, limit, header, dump, big-header, clean-src, colors, treediff, any } = require \../utils
 const { blue, magenta, cyan, bright, yellow, green, red, grey, minus, invert, white } = colors
 
-MODES = <[ Off Ast Steps Nodes Diff Compare ]>
+MODES = <[ Tokens Steps Nodes Ast Diff Compare ]>
 
-margin = 11
+margin = 10
 
 format-step = ([ signal, dent, token, src ], ix) ->
   switch signal
-  | \LOG   => "#{ cyan    pad margin, \debug     } | #{' ' * dent} #{src}"
-  | \ERR   => "#{ red     pad margin, \error     } | #{' ' * dent} #{src}"
-  | \NEW   => "#{ green   pad margin, token.type } | #{' ' * dent} #{src}"
-  | \EAT   => "#{ magenta pad margin, token.type } | #{' ' * dent} #{src}"
-  | _      => "#{ grey    pad margin, token.type } | #{' ' * dent} #{src}"
+  | \LOG   => "#{ cyan    pad margin, \debug     } |#{' ' * dent} #{src}"
+  | \ERR   => "#{ red     pad margin, \error     } |#{' ' * dent} #{src}"
+  | \NEW   => "#{ green   pad margin, token.type } |#{' ' * dent} #{src}"
+  | \EAT   => "#{ magenta pad margin, token.type } |#{' ' * dent} #{src}"
+  | _      => "#{ grey    pad margin, token.type } |#{' ' * dent} #{src}"
 
 compact-step = ([ signal, dent, token, src ], ix) ->
   switch signal
-  | \LOG   => "#{ blue    pad margin, \debug     } | #{src}"
-  | \ERR   => "#{ red     pad margin, \error     } | #{src}"
-  | \NEW   => "#{ green   pad margin, token.type } | #{src}"
-  | \EAT   => "#{ magenta pad margin, token.type } | #{src}"
-  | _      => "#{ grey    pad margin, token.type } | #{src}"
+  | \LOG   => "#{ blue    pad margin, \debug     } |#{src}"
+  | \ERR   => "#{ red     pad margin, \error     } |#{src}"
+  | \NEW   => "#{ green   pad margin, token.type } |#{src}"
+  | \EAT   => "#{ magenta pad margin, token.type } |#{src}"
+  | _      => "#{ grey    pad margin, token.type } |#{src}"
 
 mode-menu = (mode) ->
   switch MODES.index-of mode
@@ -58,6 +58,7 @@ module.exports = Runner = do ->
         steps:  result.steps
         input:  program.ast
         output: result.output
+        tokens: result.token-list
 
     render!
 
@@ -79,16 +80,16 @@ module.exports = Runner = do ->
       passed = not diff.any and not any-errors
       summary += bright if passed then green \◉ else red \◯
 
-    log summary
-    log yellow \┏ + ('━' * current) + \┛
-
-    { name, steps, diff, output } = select results, -> it.name is selection
+    { name, steps, diff, output, tokens } = select results, -> it.name is selection
 
     any-errors = any steps.map ([ type ]) -> type is \ERR
     passed     = not diff.any and not any-errors
 
 
     # Readout
+
+    log summary
+    log yellow \┏ + ('━' * current) + \┛
 
     log (yellow \┗), (bright white \===), (bright blue current),
       '•', (bright if passed then green \Passed else red \Failed),
@@ -100,15 +101,16 @@ module.exports = Runner = do ->
     log ""
 
     if any-errors
-      log minus "Parser errors\n"
+      log minus "Parser errors"
 
     if diff.any
-      log minus "AST Mismatch\n"
+      log minus "AST Mismatch"
 
-    log "---\n"
+    log white "\n---\n"
 
     switch mode
-    | \Off =>
+    | \Tokens =>
+      log '- ' + [ "#{white type}(#{yellow clean-src value})" for { type, value } in tokens ].join '\n- '
 
     | \Ast =>
       log dump output, color: on
