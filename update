@@ -1,0 +1,8 @@
+#!/bin/sh
+
+mv ~/Downloads/inceptron-master.zip master.zip
+unzip master.zip
+cp -r inceptron-master/* .
+rm master.zip
+rmdir inceptron-master
+

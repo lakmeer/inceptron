@@ -1,5 +1,5 @@
 
-const { log, parse-time, time-val } = require \../utils
+const { log, parse-time, parse-complex, time-val } = require \../utils
 
 
 #
@@ -18,7 +18,6 @@ Scope = (...body) ->
 
 ExprStmt = ->
   kind: \expr-stmt
-  type: \???
   main: it
 
 DeclStmt = (reach, type, name, value) ->
@@ -79,7 +78,6 @@ SubAttr = (name, value) ->
 
 AttrStmt = ->
   kind: \attr-stmt
-  type: \???
   attr: it
 
 AutoBool = ->
@@ -102,9 +100,42 @@ AutoTime = ->
   type: \AutoTime
   value: if typeof! it is \String then parse-time it else it
 
+AutoReal = ->
+  kind: \literal
+  type: \AutoReal
+  value: it
+
+AutoCplx = ->
+  kind: \literal
+  type: \AutoCplx
+  value: parse-complex it
+
 Symbol = ->
   kind: \symbol
   name: it
+
+ProcDef = (name, main) ->
+  kind: \procdef
+  name: name
+  main: main
+
+Call = (name, ...args) ->
+  kind: \call
+  name: name
+  args: args
+
+FuncDef = (name, type, args, main) ->
+  kind: \funcdef
+  name: name
+  type: type
+  args: args
+  main: main
+
+Arg = (name, type, init = null) ->
+  kind: \arg
+  type: type
+  name: name
+  init: init
 
 Binary = (oper, type, left, right) ->
   kind: \binary
@@ -140,7 +171,7 @@ export Degenerate =
   val: null
   ast: Root!
 
-export JustNum =
+export JustInt =
   src: "69"
   val: 69
   ast: Root ExprStmt AutoInt 69
@@ -149,6 +180,16 @@ export JustString =
   src: "\"String\""
   val: \String
   ast: Root ExprStmt AutoStr \String
+
+export ComplexLiterals =
+  src: "0e0;2e0;1e2;2e0.5pi;3i0;2i2"
+  ast: Root do
+    ExprStmt AutoCplx \0e0
+    ExprStmt AutoCplx \2e0
+    ExprStmt AutoCplx \1e2
+    ExprStmt AutoCplx \2e0.5pi
+    ExprStmt AutoCplx \3i0
+    ExprStmt AutoCplx \2i2
 
 export StringCommentEOF =
   src: "\" I'm like a comment"
@@ -262,7 +303,7 @@ export AssignmentExpression =
   src: """
   x := 2
   """
-  ast: Root ExprStmt Assign \x, (AutoInt 2)
+  ast: Root Assign \x, (AutoInt 2)
 
 export DeclSingle =
   src: "local Int x = 42"
@@ -303,7 +344,7 @@ export IfSimple =
       Ident \x
       AutoInt 69
     Scope do
-      ExprStmt Assign \x, (AutoInt 42)
+      Assign \x, (AutoInt 42)
 
 export IfElse =
   src: """
@@ -315,8 +356,8 @@ export IfElse =
   """
   ast: Root IfStmt do
         Binary \==, \AutoBool, (Ident \x), (AutoInt 69)
-        Scope ExprStmt Assign \x, (AutoInt 42)
-        Scope ExprStmt Assign \x, (AutoInt 420)
+        Scope Assign \x, (AutoInt 42)
+        Scope Assign \x, (AutoInt 420)
 
 export BooleanKeywords =
   src: "true; false"
@@ -347,7 +388,7 @@ export Times =
   src: """times 4 { x := x + 1 }"""
   ast:
     Root RepeatStmt (AutoInt 4),
-      Scope ExprStmt Assign \x,
+      Scope Assign \x,
         Binary \+, \AutoNum, (Ident \x), (AutoInt 1)
 
 export TimeUnits =
@@ -366,13 +407,13 @@ export Over =
   src: """over 2s { x := 5 }"""
   ast:
     Root OverStmt (AutoTime \2s), null,
-      Scope ExprStmt Assign \x, (AutoInt 5)
+      Scope Assign \x, (AutoInt 5)
 
 export OverEasy =
   src: """over 2s ease sq { x := 5 }"""
   ast:
     Root OverStmt (AutoTime \2s), (Ident \sq),
-      Scope ExprStmt Assign \x, (AutoInt 5)
+      Scope Assign \x, (AutoInt 5)
 
 export YieldKeyword =
   src: "yield 4"
@@ -397,76 +438,48 @@ export TreeProps =
       (TreeProp \y, AutoInt 3)
 
 export TreeBody =
-  src: """
-  <Box
-    x := 3
-  """
+  src: "<Box\n  x := 3"
   ast:
     Root TreeNode \Box, null,
       Assign \x, (AutoInt 3)
 
-
-# Waiting on operator precedence:
-
-/*
-
-export OperatorPrecedence =
+export DefineProcedure =
   src: """
-  2 + 3 * 4 - 1;
+  proc exampleProcedure {
+    i := j^2
+  }
   """
-  ast:
-    Root do
-      ExprStmt do
-          Binary \+ \AutoInt,
-            AutoInt 2
-            Binary \- \AutoInt,
-              Binary \* \AutoInt,
-                AutoInt 3
-                AutoInt 4
-              AutoInt 1
+  ast: Root ProcDef \exampleProcedure,
+        Scope Assign \i, Binary \^, \AutoNum, (Ident \j), (AutoInt 2)
 
-export ComparitorsGreater =
-  src: "x > 0 and y >= 0"
-  ast: Root ExprStmt Binary \and, \AutoBool,
-        Binary \>,  \AutoBool, (Ident \x), AutoInt 0
-        Binary \>=, \AutoBool, (Ident \y), AutoInt 0
+export ProcedureCall =
+  src: """
+  exampleProcedure()
+  """
+  ast: Root ExprStmt Call \exampleProcedure
 
-export ComparitorsLesser =
-  src: "x < 0 or y <= 0"
-  ast: Root ExprStmt Binary \or, \AutoBool,
-        Binary \<,  \AutoBool, (Ident \x), AutoInt 0
-        Binary \<=, \AutoBool, (Ident \y), AutoInt 0
+export DefineFunction =
+  src: """
+  func Int exampleFunction (Int a, Int b) -> {
+    a * b
+  }
+  """
+  ast: Root FuncDef \exampleFunction \Int, [ (Arg \a \Int), (Arg \b \Int) ],
+        Scope ExprStmt Binary \*, \AutoNum, (Ident \a), (Ident \b)
 
-*/
+export DefineFunctionOneLine =
+  src: """
+  func Int exampleFunction (Int a, Int b) -> a * b
+  """
+  ast: Root FuncDef \exampleFunction \Int, [ (Arg \a \Int), (Arg \b \Int) ],
+        Binary \*, \AutoNum, (Ident \a), (Ident \b)
 
-export SelfEvalExpr =
-  src: "3"
-  ast: Root ExprStmt AutoInt 3
-  val: 3
+export FunctionCall =
+  src: """
+  exampleFunction(2, 3)
+  """
+  ast: Root ExprStmt Call \exampleFunction, (AutoInt 2), (AutoInt 3)
 
-export NestedAddition =
-  src: "2 + 3 + 5"
-  ast: Root ExprStmt do
-    Binary \+, \AutoInt,
-      Binary \+, \AutoInt, (AutoInt 2), (AutoInt 3)
-      AutoInt 5
-  val: 10
-
-export ForcedAddition =
-  src: "2 + (3 + 5)"
-  ast: Root ExprStmt do
-    Binary \+, \AutoInt,
-      AutoInt 2
-      Binary \+, \AutoInt, (AutoInt 3), (AutoInt 5)
-  val: 10
-
-export ComplexAddition =
-  src: "(2 + 3) + 5"
-  ast: Root ExprStmt do
-    Binary \+, \AutoInt,
-      Binary \+, \AutoInt, (AutoInt 2), (AutoInt 3)
-      AutoInt 5
-  val: 10
 
 
 #
@@ -497,7 +510,7 @@ export StatefulProgram =
     Root do
       ExprStmt AutoStr " Simple Stateful Program"
       DeclStmt \local, \Int, \x, (AutoInt 1)
-      ExprStmt Assign \x, (AutoInt 2)
+      Assign \x, (AutoInt 2)
       Yield Binary \+ \AutoNum, (Ident \x), (AutoInt 1)
 
 export ExampleProgram =
@@ -527,6 +540,12 @@ export ExampleProgram =
         TreeNode \Text, (Ident \txt)
 
 
+
+
+/*
+
+# Waiting on indentation
+
 export ForeverProgram =
   src: """
   " Simple Forever Program
@@ -551,12 +570,68 @@ export ForeverProgram =
       DeclStmt \local \Int \x, (AutoInt 0)
       RepeatStmt (AutoInt 5),
         Scope do
-          Assign \x, (Ident \x), (AutoInt 1)
-          TreeNode \Text, AutoStr "Hello, Sailor"
-          TreeNode \Text, Ident \x
+          Assign \x, Binary \+, \AutoNum, (Ident \x), (AutoInt 1)
+          TreeNode \Text, (AutoStr "Hello, Sailor")
+          TreeNode \Text, (Ident \x)
       RepeatStmt \forever,
-          Scope do
-            Assign \x, (Ident \x), (AutoInt 1)
-            TreeNode \Box, null,
-              AttrStmt Attr \attribute, (Ident \x)
+        Scope do
+          Assign \x, Binary \+, \AutoNum, (Ident \x), (AutoInt 1)
+          TreeNode \Box, null,
+            AttrStmt Attr \attribute, (Ident \x)
+
+
+# Waiting on operator precedence:
+
+export OperatorPrecedence =
+  src: """
+  2 + 3 * 4 - 1;
+  """
+  ast:
+    Root do
+      ExprStmt do
+          Binary \+ \AutoInt,
+            AutoInt 2
+            Binary \- \AutoInt,
+              Binary \* \AutoInt,
+                AutoInt 3
+                AutoInt 4
+              AutoInt 1
+
+export ComparitorsGreater =
+  src: "x > 0 and y >= 0"
+  ast: Root ExprStmt Binary \and, \AutoBool,
+        Binary \>,  \AutoBool, (Ident \x), AutoInt 0
+        Binary \>=, \AutoBool, (Ident \y), AutoInt 0
+
+export ComparitorsLesser =
+  src: "x < 0 or y <= 0"
+  ast: Root ExprStmt Binary \or, \AutoBool,
+        Binary \<,  \AutoBool, (Ident \x), AutoInt 0
+        Binary \<=, \AutoBool, (Ident \y), AutoInt 0
+
+export NestedAddition =
+  src: "2 + 3 + 5"
+  ast: Root ExprStmt do
+    Binary \+, \AutoInt,
+      Binary \+, \AutoInt, (AutoInt 2), (AutoInt 3)
+      AutoInt 5
+  val: 10
+
+export ForcedAddition =
+  src: "2 + (3 + 5)"
+  ast: Root ExprStmt do
+    Binary \+, \AutoInt,
+      AutoInt 2
+      Binary \+, \AutoInt, (AutoInt 3), (AutoInt 5)
+  val: 10
+
+export ComplexAddition =
+  src: "(2 + 3) + 5"
+  ast: Root ExprStmt do
+    Binary \+, \AutoInt,
+      Binary \+, \AutoInt, (AutoInt 2), (AutoInt 3)
+      AutoInt 5
+  val: 10
+
+*/
 

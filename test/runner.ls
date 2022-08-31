@@ -78,7 +78,7 @@ module.exports = Runner = do ->
     for result, ix in results
       { name, diff } = result
       passed = not diff.any and not any-errors
-      summary += bright if passed then green \◉ else red \◯
+      summary += bright if passed then green ' ◉' else red ' ◯'
 
     { name, steps, diff, output, tokens } = select results, -> it.name is selection
 
@@ -151,8 +151,8 @@ module.exports = Runner = do ->
   mode-up:  render-after -> mode-ix  := limit 0, MODES.length   - 1, mode-ix - 1
   mode-dn:  render-after -> mode-ix  := limit 0, MODES.length   - 1, mode-ix + 1
   set-last: render-after -> current  := options.length - 1
-  select:   render-after -> current  := it
-  set-mode: render-after -> mode-ix  := it
+  select:   render-after -> current  := limit 0, options.length - 1, it
+  set-mode: render-after -> mode-ix  := limit 0, MODES.length - 1, it
   render:   render
   proess:   process
   load:     load

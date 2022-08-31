@@ -1,11 +1,11 @@
 
 # Helpers
 
-{ log, pad, parse-time, colors, treediff, truncate, clean-src, take } = require \./utils
+{ log, dump, pad, parse-time, parse-complex, colors, treediff, truncate, clean-src, take } = require \./utils
 { treediff, any-diffs } = treediff
 { color, bright, grey, red, yellow, green, blue, magenta, white, plus, minus, invert } = colors
 
-{ TAGS, MATCHLIST, is-bool-op, is-binary-op, is-assign-op, is-literal } = require \./token-specs
+{ TAGS, MATCHLIST, is-bool-op, is-math-op, is-binary-op, is-assign-op, is-literal } = require \./token-specs
 
 const $ = TAGS
 const trunc = (n, txt) -> truncate n, (grey \...), (grey \:EOF), txt
@@ -150,12 +150,14 @@ export const parse = (source) ->
     body: Body!
 
   Body = wrap \Body ->
-    if next.type is $.NEWLINE
-      eat $.NEWLINE
     list = []
     while next.type isnt $.EOF and next.type isnt $.SCOPE_END
-      list.push Statement!
-      log \WHILE_BODY yellow next.type
+      if next.type is $.NEWLINE
+        eat $.NEWLINE
+      else
+        list.push Statement!
+        if next.type is $.SEMICOLON then eat $.SEMICOLON
+
     return list
 
   Scope = wrap \Scope ->
@@ -173,12 +175,15 @@ export const parse = (source) ->
     while next.type is $.NEWLINE or next.type is $.SEMICOLON
       eat next.type
 
-    if (peek 1) is $.OP_ASSIGN then
+    if (peek 1) is $.OP_ASSIGN
       return AssignmentExpression!
 
     switch next.type
+    | $.NEWLINE   => eat $.NEWLINE
     | $.IF        => IfStatement!
     | $.ATTR      => AttrStatement!
+    | $.PROC      => ProcStatement!
+    | $.FUNC      => FuncStatement!
     | $.REACH     => DeclarationStatement!
     | $.REPEAT    => RepeatStatement!
     | $.OVER      => TimeStatement!
@@ -189,14 +194,7 @@ export const parse = (source) ->
 
   ExpressionStatement = wrap \ExpressionStatement ->
     expr = PrimaryExpression!
-
-    switch next.type
-    | $.NEWLINE   => eat $.NEWLINE # This is a TDD prayer, could cause problems
-    | $.SCOPE_END => eat $.SCOPE_END # This is a TDD prayer, could cause problems
-    | $.EOF       => eat $.EOF
-    | _           => eat $.SEMICOLON
     kind: \expr-stmt
-    type: \???
     main: expr
 
   DeclarationStatement = wrap \DeclarationStatement ->
@@ -253,13 +251,34 @@ export const parse = (source) ->
 
   AttrStatement = wrap \AttrStatement ->
     kind: \attr-stmt
-    type: \???
     attr: Attribute!
 
   Yield = wrap \Yield ->
     eat $.YIELD
     kind: \yield
     main: PrimaryExpression!
+
+  ProcStatement = wrap \ProcStatement ->
+    eat $.PROC
+    kind: \procdef
+    name: eat $.IDENT
+    main: Scope!
+
+  FuncStatement = wrap \FuncStatement ->
+    eat $.FUNC
+    type = eat $.TYPE
+    name = eat $.IDENT
+    args = ArgList!
+    eat \ARR_RIGHT
+    kind: \funcdef
+    name: name
+    type: type
+    args: args
+    main:
+      if next.type is $.SCOPE_BEG
+        Scope!
+      else
+        Expression!
 
 
   # TreeNodes
@@ -336,15 +355,18 @@ export const parse = (source) ->
     | next.type is $.PAR_OPEN => ParenExpression!
     | is-assign-op (peek 1)   => AssignmentExpression!
     | is-binary-op (peek 1)   => BinaryExpression!
-    | next.type is $.IDENT    => Identifier!
-    | _                       => Expression!
+    | next.type is $.IDENT    =>
+      if (peek 1) is $.PAR_OPEN
+        FunctionCall!
+      else
+        Identifier!
+    | _ => Expression!
 
   Expression = wrap \Expression ->
     return Literal! if is-literal next.type
 
     switch next.type
     | $.OP_NOT   => UnaryExpression!
-    | $.PAR_OPEN => ParenExpression!
     | $.IDENT    => BinaryExpression!
     | $.INTLIKE  => BinaryExpression!
     | $.STRING   => Literal!
@@ -388,8 +410,11 @@ export const parse = (source) ->
       if node isnt null
         if is-bool-op oper
           node.type = \AutoBool
-        else if node.left.type is node.right.type
-          node.type = node.left.type
+        else if is-math-op oper
+          node.type = \AutoNum
+
+          if node.left.type is node.right.type and node.left.type
+            node.type = node.left.type
       else
         error "BinaryExpression: LHS node is null"
 
@@ -415,27 +440,73 @@ export const parse = (source) ->
     else
       Identifier!
 
+  FunctionCall = wrap \FunctionCall ->
+    kind: \call
+    name: eat $.IDENT
+    args: ExpressionList!
+
+  ExpressionList = wrap \ExpressionList ->
+    eat $.PAR_OPEN
+    list = []
+    while next.type isnt $.PAR_CLOSE and next.type isnt $.EOF
+      list.push Expression!
+      if next.type is $.COMMA
+        eat $.COMMA
+    eat $.PAR_CLOSE
+    return list
+
+  ArgList = wrap \ArgList ->
+    eat $.PAR_OPEN
+    args = []
+    while next.type isnt $.PAR_CLOSE and next.type isnt $.EOF
+      args.push Argument!
+      if next.type is $.COMMA
+        eat $.COMMA
+    eat $.PAR_CLOSE
+    return args
+
+  Argument = wrap \Argument ->
+    type = eat $.TYPE
+    name = eat $.IDENT
+    init = null
+    if next.type is $.OP_EQ
+      eat $.OP_EQ
+      init := Literal!
+    kind: \arg
+    type: type
+    name: name
+    init: init
+
 
   # Leaves
 
   Variable = wrap \Variable ->
     switch next.type
     | $.IDENT => Identifier!
-    | _      => Literal!
+    | _       => Literal!
 
   Literal = wrap \Literal ->
     switch next.type
-    | $.TIMELIKE => TimeLiteral!
-    | $.INTLIKE  => NumericLiteral!
+    | $.NULL     => NullLiteral!
     | $.BOOL     => BooleanLiteral!
+    | $.INTLIKE  => IntegerLiteral!
+    | $.REALLIKE => RealLiteral!
+    | $.CPLXLIKE => ComplexLiteral!
+    | $.TIMELIKE => TimeLiteral!
     | $.STRING   => StringLiteral!
     | $.SYMBOL   => Symbol!
-    | _         => eat next.type; null
+    | _          => eat next.type; null
 
   Symbol = wrap \Symbol ->
     if eat $.SYMBOL
       kind: \symbol
       name: that.slice 1
+
+  NullLiteral = wrap \NullLiteral ->
+    if eat $.NULL
+      kind: \literal
+      type: \Null
+      value: null
 
   BooleanLiteral = wrap \BooleanLiteral ->
     if eat $.BOOL
@@ -443,17 +514,29 @@ export const parse = (source) ->
       type: \AutoBool
       value: that is \true
 
+  IntegerLiteral = wrap \IntegerLiteral ->
+    if eat $.INTLIKE
+      kind: \literal
+      type: \AutoInt
+      value: parse-int that
+
+  RealLiteral = wrap \RealLiteral ->
+    if eat $.REALLIKE
+      kind: \literal
+      type: \AutoReal
+      value: parse-float that
+
+  ComplexLiteral = wrap \ComplexLiteral ->
+    if eat $.CPLXLIKE
+      kind: \literal
+      type: \AutoCplx
+      value: parse-complex that
+
   TimeLiteral = wrap \TimeLiteral ->
     if eat $.TIMELIKE
       kind: \literal
       type: \AutoTime
       value: parse-time that
-
-  NumericLiteral = wrap \NumericLiteral ->
-    if eat $.INTLIKE
-      kind: \literal
-      type: \AutoInt
-      value: parse-int that
 
   StringLiteral = wrap \StringLiteral ->
     if eat $.STRING
@@ -462,16 +545,13 @@ export const parse = (source) ->
       value: that.replace /^"/, '' .replace /"$/, ''
 
   Identifier = wrap \Identifier ->
-    name = eat $.IDENT
-    kind: \ident
-    name: name
-    reach: \here
+    if eat $.IDENT
+      kind: \ident
+      name: that
+      reach: \here
 
 
   # Init
-
-  log tokens.map (.type |> yellow)
-  log ""
 
   token-list = [ it for it in tokens ]
   next := tokens.shift!

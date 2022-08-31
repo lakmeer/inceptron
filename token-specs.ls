@@ -35,16 +35,26 @@ export LIBRARY = do
     * Spec \KeywordReach          \REACH            /^(local|share|uniq|lift|const)\b/
     * Spec \KeywordEase           \EASE             /^ease\b/
     * Spec \KeywordYield          \YIELD            /^yield\b/
+    * Spec \KeywordProc           \PROC             /^proc\b/
+    * Spec \KeywordFunc           \FUNC             /^func\b/
+
+  NonKeywordSymbols:
+    * Spec \SpinalArrow           \ARR_LEFT         /^<-/
+    * Spec \FunctionArrow         \ARR_RIGHT        /^->/
+    * Spec \BindingArrowLeft      \BIND_LEFT        /^<~/
+    * Spec \BindingArrowRight     \BIND_RIGHT       /^~>/
 
   Literals:
-    * Spec \LiteralNull           \NULL             /^null\b/
-    * Spec \LiteralTime           \TIMELIKE         /^([\d]+h)?([\d]+m)?([\d]+s)?([\d]+ms)?\b/
     * Spec \LiteralAttribute      \ATTR             /^:[\w]+/
     * Spec \LiteralSubattribute   \SUBATTR          /^::[\w]+/
     * Spec \LiteralTreenode       \TREENODE         /^<[\w]+\b/
-    * Spec \LiteralInteger        \INTLIKE          /^[\d]+/
+    * Spec \LiteralTime           \TIMELIKE         /^(\d+h)?(\d+m)?(\d+s)?(\d+ms)?\b/
+    * Spec \LiteralComplex        \CPLXLIKE         /^\d+(\.\d+)?e\d+(\.\d+(pi)?)?/, /^\d(\.\d+)?i\d+(\.\d+)?/
+    * Spec \LiteralReal           \REALLIKE         /^\d+\.\d+/
+    * Spec \LiteralInteger        \INTLIKE          /^\d+/
     * Spec \LiteralSymbol         \SYMBOL           /^`\w+/
     * Spec \LiteralBoolean        \BOOL             /^(true|false)\b/
+    * Spec \LiteralNull           \NULL             /^null\b/
     * Spec \LiteralString         \STRING           /^"[^"\n]*"/
     * Spec \LiteralStringComment  \STRCOM           /^"[^"\n]*$/, /^"[^"\n]*/
 

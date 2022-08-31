@@ -5,6 +5,8 @@ const { dump } = require \./dump
 const colors   = require \./colors
 const treediff = require \./treediff
 
+const { PI, sin, cos, sqrt, atan2 } = Math
+
 
 # Re-export
 
@@ -40,6 +42,28 @@ export const parse-time = (time) ->
     cursor := cursor + 1
 
   return time-val res
+
+export const parse-radians = (rad) ->
+  if rad.index-of(\pi) > -1
+    PI * parse-float rad.replace \pi, ""
+  else
+    parse-float rad
+
+export const parse-complex = (cplx) ->
+  if cplx.index-of(\e) > -1
+    [ mag, arg ] = cplx.split(\e).map parse-radians
+    x: mag * cos arg
+    y: mag * sin arg
+    r: mag
+    a: arg
+  else if cplx.index-of(\i) > -1
+    [ re, im ] = cplx.split(\i).map parse-radians
+    x: re
+    y: im
+    r: sqrt(re*re + im*im)
+    a: atan2 im, re
+  else
+    throw "Not a complex number literal: #cplx"
 
 
 # Traverse-Assert - recursively compare two nested ASTs
