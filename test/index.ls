@@ -168,7 +168,6 @@ Assign = (left, right) ->
 
 export Degenerate =
   src: ""
-  val: null
   ast: Root!
 
 export HashComment =
@@ -180,6 +179,11 @@ export JustInt =
   src: "69"
   val: 69
   ast: Root ExprStmt AutoInt 69
+
+export JustReal =
+  src: "4.20"
+  val: 4.2
+  ast: Root ExprStmt AutoReal 4.2
 
 export JustString =
   src: "\"String\""
@@ -256,7 +260,7 @@ export MultipleStatements =
   420;
   "butts"
   """
-  val: \butt
+  val: \butts
   ast:
     Root do
       ExprStmt AutoInt 420

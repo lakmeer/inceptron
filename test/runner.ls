@@ -1,5 +1,5 @@
-const { log, pad, pad-end, select, limit, header, dump, big-header, clean-src, colors, treediff, any } = require \../utils
-const { blue, magenta, cyan, bright, yellow, green, red, grey, plus, minus, invert, white } = colors
+const { log, pad, pad-end, equivalent, select, limit, header, dump, big-header, clean-src, colors, treediff, any } = require \../utils
+const { blue, magenta, cyan, bright, yellow, green, red, grey, white, plus, minus, invert, expect, master, slave } = colors
 
 MODES = <[ Tokens Steps Nodes Ast Diff Compare Execute ]>
 
@@ -36,10 +36,18 @@ mode-menu = (mode) ->
   | _                =>  white (pad-end 8, mode) + "↕ "
 
 passing = (result) ->
-  no-errors = not any result.steps.map ([ type ]) -> type is \ERR
-  no-diffs  = not result.diff.any
-  no-exec   = not result.exec.error
-  no-errors and no-diffs and no-exec
+  parse-errors = any result.steps.map ([ type ]) -> type is \ERR
+  diff-errors  = result.diff.any
+  exec-errors  = result.exec.errors.length
+
+  errors = []
+
+  if parse-errors => errors.push "Parsing error"
+  if diff-errors  => errors.push "AST Mismatch"
+  if exec-errors  => errors .= concat result.exec.errors
+
+  passed: not (parse-errors or diff-errors or exec-errors)
+  errors: errors
 
 
 #
@@ -76,10 +84,27 @@ module.exports = Runner = do ->
         exec: do
           expect = Interpreter.run program.ast
           actual = Interpreter.run result.output
-          tested: program.val isnt undefined
+          errors = []
+
+          has-output-test = program.has-own-property \val
+
+          if expect.error
+            errors.push "Exec error: Test AST threw " + master expect.error
+
+          if actual.error
+            errors.push "Exec error: Output AST threw " + output actual.error
+
+          if has-output-test and program.val isnt actual.result?.unwrap!
+            errors.push "Exec mismatch: Prescription and output diverge"
+
+          if not equivalent expect.result?.unwrap!, actual.result?.unwrap!
+            errors.push "Exec mismatch: Actual and Expected runs diverge"
+
+          target: program.val
+          tested: has-output-test
           expect: expect
           actual: actual
-          error:  (not expect.error) and (not actual.error) and program.val isnt actual.result?.unwrap!
+          errors: errors
 
     render!
 
@@ -94,6 +119,13 @@ module.exports = Runner = do ->
     console.clear!
 
 
+    # Summary
+
+    summary = " "
+    for let result, ix in results
+      summary += bright if passing(result).passed then green ' ◉' else red ' ◯'
+
+
     # Select result from result set
 
     result = select results, -> it.name is selection
@@ -102,14 +134,12 @@ module.exports = Runner = do ->
 
     # Readout
 
-    summary = " "
-    for let result, ix in results
-      summary += bright if passing(result) then green ' ◉' else red ' ◯'
+    pass-details = passing result
 
     log summary
-    log yellow \┏ + ('━' * current) + \┛
+    log yellow \┏ + ('━━' * current) + \━┛
     log (yellow \┗), (bright white \===), (bright blue current),
-      '•', (bright if passing(result) then green \Passed else red \Failed),
+      '•', (bright if pass-details.passed then green \Passed else red \Failed),
       '•', (mode-menu mode),
       '•', (bright yellow name)
 
@@ -118,21 +148,13 @@ module.exports = Runner = do ->
     log ""
 
 
-    if (any result.steps.map ([ type ]) -> type is \ERR)
-      log minus "Parser errors"
+    # Errors
 
-    if diff.any
-      log minus "AST Mismatch"
+    for error in pass-details.errors
+      log minus error
 
-    if exec.tested
-      if exec.error
-        log minus "Execution Mismatch"
 
-      if exec.expect.error
-        log minus "#that in Expected AST"
-
-      if exec.actual.error
-        log minus "#that in Output AST"
+    # Inspector
 
     log white "\n---\n"
 
@@ -156,35 +178,40 @@ module.exports = Runner = do ->
       log diff.summary
 
     | \Compare =>
-      width = 44
+      width = 50
       left  = dump program.ast.body .split \\n
       right = dump output.body .split \\n
 
       log white (pad-end width, \Expected:) + (white \Actual:)
 
       for i from 0 til Math.max left.length, right.length
-        log (bright green pad-end width, left[i]) + bright red right[i]
+        log (bright cyan pad-end width, left[i]) + bright magenta right[i]
 
     | \Execute =>
 
-      log (bright "Expected Value:"), dump program.val, color: on
+      if exec.tested
+        log (bright "Expected Value:"), dump program.val, color: on
+      else
+        log bright magenta "No expected value set for '#name'"
 
       # Each output
 
       [ exec.expect, exec.actual ].map (it, ix) ->
 
+        log white "\n---\n"
         if ix is 0
           log bright "\nRunning #{green \test} AST:\n"
         else
-          log white "\n---\n"
           log bright "Running #{red \output} AST:\n"
 
         if it.error
           log (minus \Exception), bright it.error
-          log it.trace
-        else
-          log it.result?.to-string!
           log ""
+          log it.trace?.map(format-trace).join \\n
+        else
+          log "\nOutput Tree:"
+          log it.result?.to-string!
+          log "\nUnwrapped Value:"
           log dump it.result?.unwrap!, color: on
 
       # Expectation
@@ -192,14 +219,10 @@ module.exports = Runner = do ->
       if exec.tested
         log white "\n---\n"
 
-        if program.val is exec.actual.result?.unwrap!
+        if exec.errors.length is 0
           log plus \OK
         else
-          log (minus "Mismatch:")
-          log "Expected value:", dump program.val,           color: on
-          log "Actual value:  ", dump exec.actual.result?.unwrap!, color: on
-          log ""
-          #log dump exec.actual.result
+          log "Output execution traceback:"
           log exec.actual.trace?.map(format-trace).join \\n
 
 

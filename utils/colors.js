@@ -32,4 +32,5 @@ exports.bright = color(BRIGHT)
 exports.plus   = color(BRIGHT, GREEN + 10)
 exports.minus  = color(BRIGHT, RED   + 10)
 exports.invert = color(BRIGHT, CYAN  + 10)
-
+exports.master = color(BRIGHT, WHITE, CYAN +  10)
+exports.slave  = color(BRIGHT, WHITE, MAGENTA + 10)

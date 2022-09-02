@@ -3,7 +3,7 @@
 
 const { dump }           = require \./dump
 const { log, def, join } = require \./helpers
-const { plus, minus }    = require \./colors
+const { master, slave } = require \./colors
 const { detailed-diff }  = require \./diff
 
 
@@ -56,7 +56,7 @@ module.exports = (a, b) ->
           txt = fn key, (traverse val, d + 1, chain ++ key)
 
           if (def missing) and (key is first-key missing) and not more-children missing
-            minus txt
+            slave txt
           else
             txt
 
@@ -64,13 +64,13 @@ module.exports = (a, b) ->
     | \Object, \Array => recurse thing, (key, val) -> "#key: #val"
     | _ =>
       if def changed
-        str += (minus dump thing, {}, d) + (plus dump changed, {}, d)
+        str += (slave dump thing, {}, d) + (master dump changed, {}, d)
       else
         str += dump thing, {}, d
 
     if (def added) and not more-children added
       if added isnt {}
-        str += plus dump added, {}, d
+        str += master dump added, {}, d
 
     return str
 
