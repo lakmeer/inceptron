@@ -171,6 +171,11 @@ export Degenerate =
   val: null
   ast: Root!
 
+export HashComment =
+  src: "# I am a comment"
+  val: null
+  ast: Root!
+
 export JustInt =
   src: "69"
   val: 69
@@ -251,7 +256,7 @@ export MultipleStatements =
   420;
   "butts"
   """
-  val: \butts
+  val: \butt
   ast:
     Root do
       ExprStmt AutoInt 420
@@ -525,7 +530,7 @@ export ExampleProgram =
     :padding pad
     :visible true
 
-    <Text txt
+    <Text txt  #>
   """
   ast:
     Root do
@@ -540,6 +545,24 @@ export ExampleProgram =
         TreeNode \Text, (Ident \txt)
 
 
+export FunctionDefineAndUse =
+  src: """
+  " Define and then use a function
+
+  func Real double (Real a) -> 2.0 * a
+
+  times 6 {
+    double(it)
+  }
+  """
+  val: [ 0 2 4 6 8 10 ]
+  ast:
+    Root do
+      ExprStmt AutoStr " Define and then use a function"
+      FuncDef \double \Real [ (Arg \a \Real) ],
+        Binary \* \AutoNum (AutoReal 2), (Ident \a)
+      RepeatStmt (AutoInt 6),
+        Scope ExprStmt Call \double (Ident \it)
 
 
 /*

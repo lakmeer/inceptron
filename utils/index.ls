@@ -52,12 +52,14 @@ export const parse-radians = (rad) ->
 export const parse-complex = (cplx) ->
   if cplx.index-of(\e) > -1
     [ mag, arg ] = cplx.split(\e).map parse-radians
+    txt: cplx
     x: mag * cos arg
     y: mag * sin arg
     r: mag
     a: arg
   else if cplx.index-of(\i) > -1
     [ re, im ] = cplx.split(\i).map parse-radians
+    txt: cplx
     x: re
     y: im
     r: sqrt(re*re + im*im)

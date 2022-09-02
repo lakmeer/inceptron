@@ -45,10 +45,13 @@ export const tokenise = (source) ->
       if str = match-rx rx, source.slice cursor
         cursor := cursor + str.length
 
-        switch type
-        | $.BLANK, $.SPACE, $.INDENT => return read!
-        | $.STRCOM                   => return Token $.STRING, str.trim-left!
-        | otherwise                  => return Token type, str
+        if type in [ $.BLANK, $.SPACE, $.INDENT, $.COMMENT ]
+          return read!
+
+        if type is $.STRCOM
+          return Token $.STRING, str.trim-left!
+
+        return Token type, str
 
     return Token $.UNKNOWN, source[cursor]
 
@@ -172,7 +175,7 @@ export const parse = (source) ->
   # Statements
 
   Statement = wrap \Statement ->
-    while next.type is $.NEWLINE or next.type is $.SEMICOLON
+    while next.type in [ $.NEWLINE, $.SEMICOLON ]
       eat next.type
 
     if (peek 1) is $.OP_ASSIGN
@@ -278,7 +281,7 @@ export const parse = (source) ->
       if next.type is $.SCOPE_BEG
         Scope!
       else
-        Expression!
+        PrimaryExpression!
 
 
   # TreeNodes

@@ -26,6 +26,7 @@ export LIBRARY = do
     * Spec \ScopeClosing          \SCOPE_END        /^}/
     * Spec \ParenthesesOpen       \PAR_OPEN         /^\(/
     * Spec \ParenthesesClose      \PAR_CLOSE        /^\)/
+    * Spec \TreeNodeClose         \TREE_CLOSE       /^>/
 
   Keywords:
     * Spec \KeywordIf             \IF               /^if\b/
@@ -45,6 +46,7 @@ export LIBRARY = do
     * Spec \BindingArrowRight     \BIND_RIGHT       /^~>/
 
   Literals:
+    * Spec \LiteralComment        \COMMENT          /^#.*\n/, /^#.*$/
     * Spec \LiteralAttribute      \ATTR             /^:[\w]+/
     * Spec \LiteralSubattribute   \SUBATTR          /^::[\w]+/
     * Spec \LiteralTreenode       \TREENODE         /^<[\w]+\b/

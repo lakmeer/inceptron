@@ -1,13 +1,9 @@
 
 # Requires
 
-const Parser      = require \./parser
 const Runner      = require \./test/runner
-
-
-#
-# Interpreter
-#
+const Parser      = require \./parser
+const Interpreter = require \./interpreter
 
 
 #
@@ -42,9 +38,9 @@ parser-tests = ->
       | UP    => Runner.mode-up!
 
   # Initialise runner with test suite
-  Runner.load (require \./test), Parser
-  Runner.set-mode 1
-  Runner.select 44
+  Runner.load (require \./test), Parser, Interpreter
+  Runner.set-mode 6
+  Runner.select 14
 
 
 parser-tests!

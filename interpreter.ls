@@ -1,21 +1,24 @@
 
 # Imports
 
-const { log, header, colors, dump } = require \./utils
-const { plus, minus, bright, red, yellow, green, blue, white, cyan, grey, black } = colors
+const { log, colors, dump } = require \./utils
+const { plus, minus, bright, red, yellow, green, blue, white, magenta, cyan, grey } = colors
 
 
 # Helpers
 
-last   = (xs) -> if xs.length then xs[*-1] else null
-warn   = -> yellow it
+last = (xs) -> if xs.length then xs[*-1] else null
+warn = -> log bright yellow it; it
 
 assert = (a, b = true) ->
   if b instanceof Array and not b.includes a
-    error red "ASSERT expects one of [#{b.join \,}] but got `#a`"
+    log red "expected one of [#{b.join \,}] but got `#a`"
   else if not b ~= a
-    error red "ASSERT expects `#b` but got `#a`"
-
+    log red "expected `#b` but got `#a`"
+  else if b instanceof Array
+    log green "`#a` found."
+  else
+    log green "`#a` is `#b`"
 
 
 # Reference constants
@@ -24,12 +27,13 @@ const BASIC_TYPES =
   <[ Int Real Num Str Bool Path Time Guid ]>
 
 const ACCEPTED_TYPES =
-  \+ : <[ Num Int Real AutoNum AutoInt AutoReal ]>
-  \- : <[ Num Int Real AutoNum AutoInt AutoReal ]>
-  \* : <[ Num Int Real AutoNum AutoInt AutoReal ]>
-  \/ : <[ Num Int Real AutoNum AutoInt AutoReal ]>
-  \~ : <[ Str Path AutoStr AutoPath List ]>
-  \! : <[ Bool ]>
+  \+  : <[ Num Int Real AutoNum AutoInt AutoReal ]>
+  \-  : <[ Num Int Real AutoNum AutoInt AutoReal ]>
+  \*  : <[ Num Int Real AutoNum AutoInt AutoReal ]>
+  \/  : <[ Num Int Real AutoNum AutoInt AutoReal ]>
+  \~  : <[ Str Path AutoStr AutoPath List ]>
+  \!  : <[ Bool ]>
+  \== : <[ Bool AutoBool Num AutoNum Int AutoInt Real AutoReal Path AutoPath Str AutoStr ]>
 
 const TYPE_INHERITS =
   \Num      : <[ Int Real Num AutoInt AutoReal AutoNum ]>
@@ -40,12 +44,7 @@ const TYPE_INHERITS =
   \AutoReal : <[ Real AutoReal ]>
 
 
-# Expr represents a live scope
-
-# Block captures an expired scope
-
 # TODO: Move these to a common file (types.ls) and import to both
-# TODO: Use explicit Expr class for constructing the AST in ast.ls
 
 class Nothing
   promote: (parent) ->
@@ -56,6 +55,7 @@ class Nothing
     pad + grey "<Nothing>"
 
   unwrap: ->
+    #log (yellow \unwrap), \Nothing
     null
 
 class Attr
@@ -70,6 +70,7 @@ class Attr
     pad + head + @args.map (.toString!)
 
   unwrap: ->
+    #log (yellow \unwrap), \Attr
     @args.map (.unwrap!)
 
 class Value
@@ -82,15 +83,19 @@ class Value
     head = white "<#{@type} "
 
     # TOOD: use @type instead
-    switch typeof @value
-    | \string  => pad + head + bright green \" + @value.trim() + \"
-    | \number  => pad + head + yellow @value
-    | \boolean => pad + head + if @value then (plus "?TRUE") else (minus "?FALSE")
+    switch @type
+    | \AutoStr  => pad + head + yellow \" + @value.trim() + \"
+    | \AutoNum, \AutoInt, \AutoReal => pad + head + blue @value
+    | \AutoCplx => pad + head + blue @value.txt
+    | \AutoBool => pad + head + (if @value then (plus "?TRUE") else (minus "?FALSE"))
+    | _        => pad + head + bright red "Unsupported Literal Type: #that"
 
-  unwrap: -> @value
+  unwrap: ->
+    #log (yellow \unwrap), \Value
+    @value
 
 
-class Block
+class TreeNode
   (@type = "None", @reach, @children) ->
     if not (@children instanceof Array)
       @children = [ @children ]
@@ -102,7 +107,7 @@ class Block
       error "Unwrapped block type '#{@type}' is not compatible with yielding scope type: '#{parent.type}'"
       return Nothing
 
-    new Block parent.type, parent.reach, @children
+    new TreeNode parent.type, parent.reach, @children
 
   set-attr: (attr) ->
     if not (attr instanceof Attr)
@@ -110,14 +115,18 @@ class Block
     @attrs.push attr
 
   unwrap: ->
-    last @children .unwrap!
+    #log (yellow \unwrap), \Treenode @type
+    if @children.length
+      last @children .unwrap!
+    else
+      null
 
   toString: (d = 0) ->
     head = blue "<#{@type}"
     pad = "  " * d
 
     stringify = ->
-      if it instanceof Block
+      if it instanceof TreeNode
         it.toString(d+1)
       else if it instanceof Value
         it.toString(d+1)
@@ -146,63 +155,76 @@ class Block
 
 # Main
 
-each = (expr, env) ->
-  yld = switch expr.kind
+eval-expr = (expr, env, trace) ->
+  switch expr.kind
     | \scope =>
-      new Block expr.type, \local,
+      new TreeNode expr.type, \local,
         expr.body
-          .map    -> each it, env
-          .filter -> not (it instanceof Nothing)  # Remove Expr`s that dont yield Blocks
+          .map    -> each it, env, trace
+          .filter -> not (it instanceof Nothing)  # Remove Expr`s that dont yield TreeNode
+
+    | \expr-stmt =>
+      each expr.main, env, trace
 
     | \literal =>
-      new Value expr.type, \local, expr.main
+      new Value expr.type, \local, expr.value
 
     | \atom =>
       new Value \symbol, expr.name
 
     | \attr =>
-      new Attr expr.name, expr.args.map -> each it, env
+      new Attr expr.name, expr.args.map -> each it, env, trace
 
-    | \decl =>
-      env[expr.name] = each expr.main, env
-      new Nothing
+    | \decl-stmt =>
+      env[expr.name] = each expr.value, env, trace
+      new Nothing!
 
     | \assign =>
-
-      ident = env[expr.name]
-      value = each expr.main, env
+      ident = env[expr.left]
+      value = each expr.right, env, trace
 
       # TODO: Type check assignments
-
-      env[expr.name] = each expr.main, env
-      new Nothing
+      env[expr.left] = each expr.right, env, trace
+      new Nothing!
 
     | \ident =>
-      env[expr.name] or new Nothing
+      trace [ \xxx, \ident ]
+      trace [ \xxx, expr.name ]
+      trace [ \xxx, env ]
+      if env[expr.name]
+        that
+      else
+        throw "Couldn't find variable '#{expr.name}' in scope"
+        new Nothing!
 
     | \yield =>
-      each expr.main, env
+      each expr.main, env, trace
 
     | \timing =>
       switch expr.type
       | \forever =>
-          # set-immediate -> each expr, env
-          each expr.main, env
+          # set-immediate -> each expr, env, trace
+          each expr.main, env, trace
       | \times =>
-        new Block \None, \local, do
-          for i from 1 to expr.freq
-            each expr.main, env
+        new TreeNode \None, \local, do
+          [ each expr.main, env, trace for i from 1 to expr.freq ]
       | _ =>
-        warn "Unsupported timing type: '#{expr.type}'"
+        trace [ \WARN, warn "Unsupported timing type: '#{expr.type}'" ]
 
     | \binary =>
-      left  = each expr.left, env
-      right = each expr.right, env
+      left  = each expr.left, env, trace
+      right = each expr.right, env, trace
 
-      assert left  instanceof Value
-      assert right instanceof Value
-      assert left.type,  ACCEPTED_TYPES[expr.oper]
-      assert right.type, ACCEPTED_TYPES[expr.oper]
+      trace [ \dump, dump expr.left ]
+      trace [ \dump, dump left ]
+      if not left
+        log left
+        throw \halt
+
+      trace [ \ASSERT, assert left  instanceof Value ]
+      trace [ \ASSERT, assert right instanceof Value ]
+      trace [ \ASSERT, assert left.type,  ACCEPTED_TYPES[expr.oper] ]
+      trace [ \ASSERT, assert right.type, ACCEPTED_TYPES[expr.oper] ]
 
       new Value expr.type, \local,
         switch expr.oper
@@ -211,17 +233,25 @@ each = (expr, env) ->
         | \*  => left.value * right.value
         | \/  => left.value / right.value
         | \:= => log (red \:=), left, right
+        | \== => left.value is right.value
         | _ =>
-          warn "Unsupport operator: '#{expr.oper}'"
+          trace [ \WARN, warn "Unsupported operator: '#{expr.oper}'" ]
           new Nothing
 
     | _ =>
-      warn "Can't handle this kind of Expr: '#{expr.kind}'"
+      trace [ \WARN, warn "Can't handle this kind of Expr: '#{expr.kind}'" ]
       new Nothing
 
 
+each = (expr, env, trace = ->) ->
+
+  log \each expr
+  trace [ \EVAL, expr.kind, expr ]
+
+  yld = eval-expr expr, env, trace
+
   # Analyse yielded blocks
-  if yld instanceof Block
+  if yld instanceof TreeNode
     new-children = []
 
     for child, ix in yld.children
@@ -236,40 +266,22 @@ each = (expr, env) ->
 
 
 #
-# Test Runner
+# Exported Interface
 #
 
-run-and-test = (selection) ->
-  program = tests[selection]
+export run = (root) ->
+  tracestack = []
 
-  header bright green selection
-  log bright program.src
-  log ""
+  try
+    result = each root, {}, tracestack~push
+    ast: root
+    error: false
+    result: result
+    trace: tracestack
 
-  #{ output, steps } = Parser.parse program.src
-
-  result = each program.ast
-  final = result.unwrap!
-
-  log result.to-string!
-  log bright "Final Value:", yellow final
-  log ""
-
-  if final and final === program.val
-    header plus "#selection: Passed"
-  else
-    log bright red "Expected '#{program.val}' but got '#{final}'"
-    log ""
-    header minus "#selection: Failed"
-
-
-#
-# Run Tests
-#
-
-tests = require \./test
-
-console.clear!
-
-run-and-test \SimpleProgram
+  catch ex
+    ast: root
+    error: ex.message
+    result: undefined
+    trace: tracestack
 
