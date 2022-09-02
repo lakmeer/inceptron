@@ -88,18 +88,25 @@ class Value
 
   toString: (d = 0) ->
     pad = "  " * d
-    head = white "<#{@type} "
 
-    # TOOD: use @type instead
-    switch @type
-    | \Str,  \AutoStr  => pad + head + yellow \" + @value.trim() + \"
-    | \Num,  \AutoNum  => pad + head + blue @value
-    | \Int,  \AutoInt  => pad + head + blue @value
-    | \Real, \AutoReal => pad + head + blue @value
-    | \Cplx, \AutoCplx => pad + head + blue @value.txt
-    | \Time, \AutoTime => pad + head + bright green @value
-    | \Book, \AutoBool => pad + head + (if @value then (plus "?TRUE") else (minus "?FALSE"))
-    | _        => pad + head + bright red "Unsupported Literal Type: #that"
+    if @isList
+      head = white "<#{@type}`s [\n"
+      pad + head + @value.map(-> it.to-string(d + 1)).join(\\n) +
+      pad + "\n\]"
+
+    else
+      head = white "<#{@type} "
+
+      # TOOD: use @type instead
+      switch @type
+      | \Str,  \AutoStr  => pad + head + yellow \" + @value.trim() + \"
+      | \Num,  \AutoNum  => pad + head + blue @value
+      | \Int,  \AutoInt  => pad + head + blue @value
+      | \Real, \AutoReal => pad + head + blue @value
+      | \Cplx, \AutoCplx => pad + head + blue @value.txt
+      | \Time, \AutoTime => pad + head + bright green @value
+      | \Book, \AutoBool => pad + head + (if @value then (plus "?TRUE") else (minus "?FALSE"))
+      | _        => pad + head + bright red "Unsupported Literal Type: #that"
 
   unwrap: ->
     #log (yellow \unwrap), \Value
@@ -265,6 +272,9 @@ eval-expr = (expr, env, trace) ->
         env[expr.name](...expr.args)
       else
         new Error \ReferenceError, "Could not find referent of #{expr.name} in scope"
+
+    | \list =>
+      new Value expr.type, \local, expr.members.map -> each it, env, trace
 
     | _ =>
       trace [ \WARN, warn "Can't handle this kind of Expr: '#{expr.kind}'" ]

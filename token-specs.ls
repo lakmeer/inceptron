@@ -22,8 +22,10 @@ export LIBRARY = do
     * Spec \BlankLine             \BLANK            /^[\s]+$/, /^[\s]+\n/
 
   Grouping:
-    * Spec \ScopeOpening          \SCOPE_BEG        /^{/
-    * Spec \ScopeClosing          \SCOPE_END        /^}/
+    * Spec \ListOpening           \LIST_OPEN        /^\[/
+    * Spec \ListClosing           \LIST_CLOSE       /^\]/
+    * Spec \ScopeOpening          \SCOPE_OPEN       /^{/
+    * Spec \ScopeClosing          \SCOPE_CLOSE      /^}/
     * Spec \ParenthesesOpen       \PAR_OPEN         /^\(/
     * Spec \ParenthesesClose      \PAR_CLOSE        /^\)/
     * Spec \TreeNodeClose         \TREE_CLOSE       /^>/

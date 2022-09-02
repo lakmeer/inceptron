@@ -154,7 +154,7 @@ export const parse = (source) ->
 
   Body = wrap \Body ->
     list = []
-    while next.type isnt $.EOF and next.type isnt $.SCOPE_END
+    while next.type isnt $.EOF and next.type isnt $.SCOPE_CLOSE
       if next.type is $.NEWLINE
         eat $.NEWLINE
       else
@@ -164,9 +164,9 @@ export const parse = (source) ->
     return list
 
   Scope = wrap \Scope ->
-    eat $.SCOPE_BEG
+    eat $.SCOPE_OPEN
     body = Body!
-    if next.type isnt $.EOF then eat $.SCOPE_END
+    if next.type isnt $.EOF then eat $.SCOPE_CLOSE
     kind: \scope
     type: \???
     body: body
@@ -182,18 +182,18 @@ export const parse = (source) ->
       return AssignmentExpression!
 
     switch next.type
-    | $.NEWLINE   => eat $.NEWLINE
-    | $.IF        => IfStatement!
-    | $.ATTR      => AttrStatement!
-    | $.PROC      => ProcStatement!
-    | $.FUNC      => FuncStatement!
-    | $.REACH     => DeclarationStatement!
-    | $.REPEAT    => RepeatStatement!
-    | $.OVER      => TimeStatement!
-    | $.YIELD     => Yield!
-    | $.TREENODE  => TreeNode!
-    | $.SCOPE_BEG => Scope!
-    | _           => ExpressionStatement!
+    | $.NEWLINE    => eat $.NEWLINE
+    | $.IF         => IfStatement!
+    | $.ATTR       => AttrStatement!
+    | $.PROC       => ProcStatement!
+    | $.FUNC       => FuncStatement!
+    | $.REACH      => DeclarationStatement!
+    | $.REPEAT     => RepeatStatement!
+    | $.OVER       => TimeStatement!
+    | $.YIELD      => Yield!
+    | $.TREENODE   => TreeNode!
+    | $.SCOPE_OPEN => Scope!
+    | _            => ExpressionStatement!
 
   ExpressionStatement = wrap \ExpressionStatement ->
     expr = PrimaryExpression!
@@ -221,7 +221,7 @@ export const parse = (source) ->
       eat $.NEWLINE
     if next.type is $.ELSE
       eat $.ELSE
-      if next.type is $.SCOPE_BEG
+      if next.type is $.SCOPE_OPEN
         fail := Scope!
       else
         fail := BinaryExpression!
@@ -278,7 +278,7 @@ export const parse = (source) ->
     type: type
     args: args
     main:
-      if next.type is $.SCOPE_BEG
+      if next.type is $.SCOPE_OPEN
         Scope!
       else
         PrimaryExpression!
@@ -355,10 +355,11 @@ export const parse = (source) ->
 
   PrimaryExpression = wrap \PrimaryExpression ~>
     switch true
-    | next.type is $.PAR_OPEN => ParenExpression!
-    | is-assign-op (peek 1)   => AssignmentExpression!
-    | is-binary-op (peek 1)   => BinaryExpression!
-    | next.type is $.IDENT    =>
+    | next.type is $.LIST_OPEN => ListLiteral!
+    | next.type is $.PAR_OPEN  => ParenExpression!
+    | is-assign-op (peek 1)    => AssignmentExpression!
+    | is-binary-op (peek 1)    => BinaryExpression!
+    | next.type is $.IDENT     =>
       if (peek 1) is $.PAR_OPEN
         FunctionCall!
       else
@@ -501,6 +502,17 @@ export const parse = (source) ->
     | $.STRING   => StringLiteral!
     | $.SYMBOL   => Symbol!
     | _          => eat next.type; null
+
+  ListLiteral = wrap \ListLiteral ->
+    eat $.LIST_OPEN
+    members = []
+    while next.type isnt $.LIST_CLOSE
+      members.push Expression!
+      if next.type is $.COMMA => eat $.COMMA
+    eat $.LIST_CLOSE
+    kind: \list
+    type: if members.length then members[0].type else \???
+    members: members
 
   Symbol = wrap \Symbol ->
     if eat $.SYMBOL

@@ -163,6 +163,11 @@ Assign = (left, right) ->
   left: left
   right: right
 
+List = (type, ...members) ->
+  kind: \list
+  type: type
+  members: members
+
 
 #
 # Test Cases
@@ -502,6 +507,16 @@ export Exponentiate =
   src: "2 ^ 3"
   val: 8
   ast: Root ExprStmt Binary \^, \AutoInt, (AutoInt 2), (AutoInt 3)
+
+export ListLiteral =
+  src: "[ 1, 2, 3 ]"
+  val: [ 1, 2, 3 ]
+  ast: Root ExprStmt List \AutoInt, (AutoInt 1), (AutoInt 2), (AutoInt 3)
+
+export DeclList =
+  src: "local Int`s numbers = [ 1, 2, 3 ]"
+  ast: Root DeclStmt \local \Int`s \numbers,
+         List \Int, (AutoInt 1), (AutoInt 2), (AutoInt 3)
 
 
 #
