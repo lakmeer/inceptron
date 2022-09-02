@@ -549,6 +549,21 @@ export ExampleProgram =
         TreeNode \Text, (Ident \txt)
 
 
+export SetAndUseValue =
+  src: """
+  " Define and then use a simple value
+
+  local Real x = 2.2
+
+  yield x
+  """
+  val: 2.2
+  ast:
+    Root do
+      ExprStmt AutoStr " Define and then use a simple value"
+      DeclStmt \local \Real \x (AutoReal 2.2)
+      Yield (Ident \x)
+
 export FunctionDefineAndUse =
   src: """
   " Define and then use a function
