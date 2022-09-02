@@ -92,13 +92,13 @@ class Value
 
     # TOOD: use @type instead
     switch @type
-    | \AutoStr  => pad + head + yellow \" + @value.trim() + \"
-    | \AutoNum  => pad + head + blue @value
-    | \AutoInt  => pad + head + blue @value
-    | \AutoReal => pad + head + blue @value
-    | \AutoCplx => pad + head + blue @value.txt
-    | \AutoTime => pad + head + bright green @value
-    | \AutoBool => pad + head + (if @value then (plus "?TRUE") else (minus "?FALSE"))
+    | \Str,  \AutoStr  => pad + head + yellow \" + @value.trim() + \"
+    | \Num,  \AutoNum  => pad + head + blue @value
+    | \Int,  \AutoInt  => pad + head + blue @value
+    | \Real, \AutoReal => pad + head + blue @value
+    | \Cplx, \AutoCplx => pad + head + blue @value.txt
+    | \Time, \AutoTime => pad + head + bright green @value
+    | \Book, \AutoBool => pad + head + (if @value then (plus "?TRUE") else (minus "?FALSE"))
     | _        => pad + head + bright red "Unsupported Literal Type: #that"
 
   unwrap: ->
