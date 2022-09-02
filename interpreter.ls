@@ -10,15 +10,13 @@ const { plus, minus, bright, red, yellow, green, blue, white, magenta, cyan, gre
 last = (xs) -> if xs.length then xs[*-1] else null
 warn = -> log bright yellow it; it
 
-assert = (a, b = true) ->
+assert = (desc, a, b = true) ->
   if b instanceof Array and not b.includes a
-    log red "expected one of [#{b.join \,}] but got `#a`"
+    log (red desc) + white " | expected one of [#{b.join \,}] but got `#a`"
   else if not b ~= a
-    log red "expected `#b` but got `#a`"
-  else if b instanceof Array
-    log green "`#a` found."
+    log (red desc) + white " | expected `#b` but got `#a`"
   else
-    log green "`#a` is `#b`"
+    log bright green desc
 
 
 # Reference constants
@@ -188,9 +186,6 @@ eval-expr = (expr, env, trace) ->
       new Nothing!
 
     | \ident =>
-      trace [ \xxx, \ident ]
-      trace [ \xxx, expr.name ]
-      trace [ \xxx, env ]
       if env[expr.name]
         that
       else
@@ -215,16 +210,14 @@ eval-expr = (expr, env, trace) ->
       left  = each expr.left, env, trace
       right = each expr.right, env, trace
 
-      trace [ \dump, dump expr.left ]
-      trace [ \dump, dump left ]
       if not left
         log left
         throw \halt
 
-      trace [ \ASSERT, assert left  instanceof Value ]
-      trace [ \ASSERT, assert right instanceof Value ]
-      trace [ \ASSERT, assert left.type,  ACCEPTED_TYPES[expr.oper] ]
-      trace [ \ASSERT, assert right.type, ACCEPTED_TYPES[expr.oper] ]
+      trace [ \ASSERT, assert "Left operand is a Value",  left  instanceof Value ]
+      trace [ \ASSERT, assert "Right operand is a Value", right instanceof Value ]
+      trace [ \ASSERT, assert "Left type is compatible",  left.type,  ACCEPTED_TYPES[expr.oper] ]
+      trace [ \ASSERT, assert "Right type is compatible", right.type, ACCEPTED_TYPES[expr.oper] ]
 
       new Value expr.type, \local,
         switch expr.oper
@@ -238,6 +231,20 @@ eval-expr = (expr, env, trace) ->
           trace [ \WARN, warn "Unsupported operator: '#{expr.oper}'" ]
           new Nothing
 
+    | \funcdef =>
+      env[expr.name] = (...args) ->
+        # TODO: Typecheck args here
+        new-env = env <<< { [ name, args[i] ] for { name }, i in expr.args }
+        console.log new-env
+        each(expr.main, new-env, trace).unwrap!
+
+      log \invoke
+      env[expr.name](2, 3);
+
+      throw \halt
+      new Nothing!
+
+
     | _ =>
       trace [ \WARN, warn "Can't handle this kind of Expr: '#{expr.kind}'" ]
       new Nothing
@@ -245,7 +252,6 @@ eval-expr = (expr, env, trace) ->
 
 each = (expr, env, trace = ->) ->
 
-  log \each expr
   trace [ \EVAL, expr.kind, expr ]
 
   yld = eval-expr expr, env, trace
