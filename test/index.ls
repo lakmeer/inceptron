@@ -498,6 +498,11 @@ export StringConcat =
   val: "Hello, Sailor"
   ast: Root ExprStmt Binary \~, \AutoStr, (AutoStr "Hello, "), (AutoStr \Sailor)
 
+export Exponentiate =
+  src: "2 ^ 3"
+  val: 8
+  ast: Root ExprStmt Binary \^, \AutoInt, (AutoInt 2), (AutoInt 3)
+
 
 #
 # Interpreter Tests

@@ -235,6 +235,7 @@ eval-expr = (expr, env, trace) ->
         | \*  => left.value * right.value
         | \/  => left.value / right.value
         | \~  => left.value + right.value
+        | \^  => Math.pow(left.value, right.value)
         | \:= => log (red \:=), left, right
         | \== => left.value is right.value
         | _ =>
