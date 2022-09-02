@@ -188,30 +188,27 @@ module.exports = Runner = do ->
         log (bright cyan pad-end width, left[i]) + bright magenta right[i]
 
     | \Execute =>
-
       if exec.tested
         log (bright "Expected Value:"), dump program.val, color: on
       else
-        log bright magenta "No expected value set for '#name'"
-
-      # Each output
+        log bright blue "No expected value set for '#name'"
 
       [ exec.expect, exec.actual ].map (it, ix) ->
-
         log white "\n---\n"
+
         if ix is 0
-          log bright "\nRunning #{green \test} AST:\n"
+          log master "Test AST\n"
         else
-          log bright "Running #{red \output} AST:\n"
+          log slave "Output AST\n"
 
         if it.error
           log (minus \Exception), bright it.error
           log ""
           log it.trace?.map(format-trace).join \\n
         else
-          log "\nOutput Tree:"
+          log white "Tree:\n"
           log it.result?.to-string!
-          log "\nUnwrapped Value:"
+          log white "\nValue:\n"
           log dump it.result?.unwrap!, color: on
 
       # Expectation
