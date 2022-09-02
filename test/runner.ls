@@ -43,8 +43,8 @@ passing = (result) ->
 
   errors = []
 
-  if parse-errors => errors.push "Parsing error"
-  if diff-errors  => errors.push "AST Mismatch"
+  if parse-errors => errors.push minus "Parsing error"
+  if diff-errors  => errors.push minus "AST Mismatch"
   if exec-errors  => errors .= concat result.exec.errors
 
   passed: not (parse-errors or diff-errors or exec-errors)

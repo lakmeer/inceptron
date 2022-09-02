@@ -5,7 +5,7 @@
 { treediff, any-diffs } = treediff
 { color, bright, grey, red, yellow, green, blue, magenta, white, plus, minus, invert } = colors
 
-{ TAGS, MATCHLIST, is-bool-op, is-math-op, is-binary-op, is-assign-op, is-literal } = require \./token-specs
+{ TAGS, MATCHLIST, is-bool-op, is-math-op, is-binary-op, is-assign-op, is-list-op, is-literal } = require \./token-specs
 
 const $ = TAGS
 const trunc = (n, txt) -> truncate n, (grey \...), (grey \:EOF), txt
@@ -413,6 +413,8 @@ export const parse = (source) ->
       if node isnt null
         if is-bool-op oper
           node.type = \AutoBool
+        else if is-list-op oper
+          node.type = \AutoStr
         else if is-math-op oper
           node.type = \AutoNum
 

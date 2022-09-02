@@ -491,6 +491,12 @@ export FunctionCall =
   """
   ast: Root ExprStmt Call \exampleFunction, (AutoInt 2), (AutoInt 3)
 
+export StringConcat =
+  src: """
+  "Hello, " ~ "Sailor"
+  """
+  val: "Hello, Sailor"
+  ast: Root ExprStmt Binary \~, \AutoStr, (AutoStr "Hello, "), (AutoStr \Sailor)
 
 
 #
@@ -550,7 +556,6 @@ export ExampleProgram =
         AttrStmt Attr \visible, (AutoBool true)
         TreeNode \Text, (Ident \txt)
 
-
 export SetAndUseValue =
   src: """
   " Define and then use a simple value
@@ -581,6 +586,9 @@ export FunctionDefineAndUse =
       FuncDef \double \Real [ (Arg \a \Real) ],
         Binary \* \AutoNum (AutoReal 2.0), (Ident \a)
       ExprStmt Call \double (AutoReal 3.0)
+
+
+
 
 /*
 
