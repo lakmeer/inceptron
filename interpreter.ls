@@ -93,8 +93,11 @@ class Value
     # TOOD: use @type instead
     switch @type
     | \AutoStr  => pad + head + yellow \" + @value.trim() + \"
-    | \AutoNum, \AutoInt, \AutoReal => pad + head + blue @value
+    | \AutoNum  => pad + head + blue @value
+    | \AutoInt  => pad + head + blue @value
+    | \AutoReal => pad + head + blue @value
     | \AutoCplx => pad + head + blue @value.txt
+    | \AutoTime => pad + head + bright green @value
     | \AutoBool => pad + head + (if @value then (plus "?TRUE") else (minus "?FALSE"))
     | _        => pad + head + bright red "Unsupported Literal Type: #that"
 
@@ -125,7 +128,6 @@ class TreeNode
   unwrap: ->
     #log (yellow \unwrap), \Treenode @type
     if @children.length
-      log @children
       last @children .unwrap!
     else
       null
