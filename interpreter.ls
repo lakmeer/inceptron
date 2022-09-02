@@ -42,7 +42,17 @@ const TYPE_INHERITS =
   \AutoReal : <[ Real AutoReal ]>
 
 
-# TODO: Move these to a common file (types.ls) and import to both
+# TODO: Move these to a common file (tree-nodes.ls) and import to both
+
+class Error
+  (@error-type, @text) ->
+    @type = \Error
+
+  toString: ->
+    "#{minus " #{@error-type} "} #{@text}"
+
+  unwrap: ->
+    { @type, @text }
 
 class Nothing
   promote: (parent) ->
@@ -103,7 +113,7 @@ class TreeNode
   promote: (parent) ->
     if not TYPE_INHERITS[parent.type].includes @type
       error "Unwrapped block type '#{@type}' is not compatible with yielding scope type: '#{parent.type}'"
-      return Nothing
+      return new Nothing!
 
     new TreeNode parent.type, parent.reach, @children
 
@@ -115,6 +125,7 @@ class TreeNode
   unwrap: ->
     #log (yellow \unwrap), \Treenode @type
     if @children.length
+      log @children
       last @children .unwrap!
     else
       null
@@ -124,16 +135,10 @@ class TreeNode
     pad = "  " * d
 
     stringify = ->
-      if it instanceof TreeNode
-        it.toString(d+1)
-      else if it instanceof Value
-        it.toString(d+1)
-      else if it instanceof Nothing
-        it.toString(d+1)
-      else if typeof it is \undefined
-        pad + "  " + red \??
+      if not it.type or it is \undefined
+        pad + "  " + red "?? Don't know how to print #{it.type}"
       else
-        pad + "  " + red "?? Don't know how to print #{@type}"
+        pad + "  " + it.toString d + 1
 
     # If there's only one child, put it on the same line
     if @children.length == 0 and @attrs.length == 0
@@ -175,14 +180,17 @@ eval-expr = (expr, env, trace) ->
 
     | \decl-stmt =>
       env[expr.name] = each expr.value, env, trace
+      trace [ \ENV, env ]
       new Nothing!
 
     | \assign =>
       ident = env[expr.left]
       value = each expr.right, env, trace
 
+      trace [ \xxx, \assign-value ]
+      trace [ \xxx, value ]
       # TODO: Type check assignments
-      env[expr.left] = each expr.right, env, trace
+      env[expr.left] = value
       new Nothing!
 
     | \ident =>
@@ -210,9 +218,8 @@ eval-expr = (expr, env, trace) ->
       left  = each expr.left, env, trace
       right = each expr.right, env, trace
 
-      if not left
-        log left
-        throw \halt
+      trace [ \xxx left ]
+      trace [ \xxx right ]
 
       trace [ \ASSERT, assert "Left operand is a Value",  left  instanceof Value ]
       trace [ \ASSERT, assert "Right operand is a Value", right instanceof Value ]
@@ -229,25 +236,35 @@ eval-expr = (expr, env, trace) ->
         | \== => left.value is right.value
         | _ =>
           trace [ \WARN, warn "Unsupported operator: '#{expr.oper}'" ]
-          new Nothing
+          new Nothing!
+
+    | \procdef =>
+      env[expr.name] = (...args) ->
+        # TODO: Typecheck args here
+        each expr.main, new-env, trace
+      new Nothing!
 
     | \funcdef =>
       env[expr.name] = (...args) ->
         # TODO: Typecheck args here
         new-env = env <<< { [ name, args[i] ] for { name }, i in expr.args }
-        console.log new-env
-        each(expr.main, new-env, trace).unwrap!
+        trace [ \ENV, new-env ]
+        result = each expr.main, new-env, trace
+        trace [ \xxx, dump result ]
+        result
 
-      log \invoke
-      env[expr.name](2, 3);
-
-      throw \halt
       new Nothing!
 
+    | \call =>
+      trace [ \ENV, expr ]
+      if env[expr.name]
+        env[expr.name](...expr.args)
+      else
+        new Error \ReferenceError, "Could not find referent of #{expr.name} in scope"
 
     | _ =>
       trace [ \WARN, warn "Can't handle this kind of Expr: '#{expr.kind}'" ]
-      new Nothing
+      new Nothing!
 
 
 each = (expr, env, trace = ->) ->

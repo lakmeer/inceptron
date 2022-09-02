@@ -5,6 +5,8 @@ const { log, parse-time, parse-complex, time-val } = require \../utils
 #
 # AST Node Constructors
 #
+# TODO: Move AST constructors to a common file (ast-nodes.ls)
+#
 
 Root = (...body) ->
   kind: \scope
@@ -570,19 +572,15 @@ export FunctionDefineAndUse =
 
   func Real double (Real a) -> 2.0 * a
 
-  times 6 {
-    double(it)
-  }
+  double(3.0)
   """
-  val: [ 0 2 4 6 8 10 ]
+  val: 6.0
   ast:
     Root do
       ExprStmt AutoStr " Define and then use a function"
       FuncDef \double \Real [ (Arg \a \Real) ],
-        Binary \* \AutoNum (AutoReal 2), (Ident \a)
-      RepeatStmt (AutoInt 6),
-        Scope ExprStmt Call \double (Ident \it)
-
+        Binary \* \AutoNum (AutoReal 2.0), (Ident \a)
+      ExprStmt Call \double (AutoReal 3.0)
 
 /*
 

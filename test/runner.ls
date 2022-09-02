@@ -23,6 +23,7 @@ compact-step = ([ signal, dent, token, src ], ix) ->
 
 format-trace = ([ kind, arg ]) ->
   switch kind
+  | \ENV    => "    #{ white  \env } | ...\n #{bright white dump arg}"
   | \EVAL   => "   #{ blue   \eval } | #{arg}"
   | \WARN   => "   #{ yellow \warn } | #{arg}"
   | \ERR    => "  #{ red    \error } | #{arg}"
@@ -89,16 +90,16 @@ module.exports = Runner = do ->
           has-output-test = program.has-own-property \val
 
           if expect.error
-            errors.push "Exec error: Test AST threw " + master expect.error
+            errors.push (minus "Exec error") + ": Test AST threw " + master expect.error
 
           if actual.error
-            errors.push "Exec error: Output AST threw " + output actual.error
+            errors.push (minus "Exec error") + ": Output AST threw " + slave actual.error
 
           if has-output-test and program.val isnt actual.result?.unwrap!
-            errors.push "Exec mismatch: Prescription and output diverge"
+            errors.push (minus "Exec mismatch") + ": Prescription and output diverge"
 
           if not equivalent expect.result?.unwrap!, actual.result?.unwrap!
-            errors.push "Exec mismatch: Actual and Expected runs diverge"
+            errors.push (minus "Exec mismatch") + ": Actual and Expected runs diverge"
 
           target: program.val
           tested: has-output-test
@@ -151,7 +152,7 @@ module.exports = Runner = do ->
     # Errors
 
     for error in pass-details.errors
-      log minus error
+      log error
 
 
     # Inspector
