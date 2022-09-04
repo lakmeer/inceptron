@@ -1,5 +1,5 @@
 
-const { log, parse-time, parse-complex, time-val } = require \../utils
+const { log, parse-time, parse-complex, parse-path, time-val } = require \../utils
 
 
 #
@@ -112,6 +112,11 @@ AutoCplx = ->
   type: \AutoCplx
   value: parse-complex it
 
+AutoPath = (...parts) ->
+  kind: \literal
+  type: \AutoPath
+  value: parts
+
 Symbol = ->
   kind: \symbol
   name: it
@@ -207,6 +212,14 @@ export JustString =
   src: "\"String\""
   val: \String
   ast: Root ExprStmt AutoStr \String
+
+export PathLiteral =
+  src: "/path/to/somewhere"
+  ast: Root ExprStmt AutoPath \path \to \somewhere
+
+export PathGlob =
+  src: "/path/**/*"
+  ast: Root ExprStmt AutoPath \path \** \*
 
 export ComplexLiterals =
   src: "0e0;2e0;1e2;2e0.5pi;3i0;2i2"
@@ -644,6 +657,8 @@ export EmitAndCatchEvent =
         ExprStmt AutoStr " Emit and then catch an event"
         OnStmt \boop, null, Scope Yield AutoStr \Boop!
         EmitStmt \boop
+
+
 
 
 /*

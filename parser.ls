@@ -1,81 +1,16 @@
 
 # Helpers
 
-{ log, dump, pad, parse-time, parse-complex, colors, treediff, truncate, clean-src, take } = require \./utils
+{ log, dump, pad, parse-time, parse-complex, parse-path, colors, treediff, truncate, clean-src, take } = require \./utils
 { treediff, any-diffs } = treediff
 { color, bright, grey, red, yellow, green, blue, magenta, white, plus, minus, invert } = colors
 
-{ TAGS, MATCHLIST, is-bool-op, is-math-op, is-binary-op, is-assign-op, is-list-op, is-literal } = require \./token-specs
+{ LIBRARY, is-bool-op, is-math-op, is-binary-op, is-assign-op, is-list-op, is-literal } = require \./token-specs
 
-const $ = TAGS
-const trunc = (n, txt) -> truncate n, (grey \...), (grey \:EOF), txt
+Tokeniser = require \./tokeniser
 
+const $ = new Tokeniser LIBRARY
 
-# Token value is ALWAYS a string. Any post-processing goes in the
-# parser function that turns this token into an AST node.
-
-Token = (type, value, start = 0, end = 0, line = 0) ->
-  { type, start, end, line, value, length: value?.length }
-
-
-#
-# Tokeniser
-#
-
-export const tokenise = (source) ->
-
-  cursor = 0
-  line   = 0
-
-
-  #
-  # Functions
-  #
-
-  match-rx = (regex) ->
-    matched = regex.exec source.slice cursor
-    return null if matched is null
-    return matched.0
-
-  read = ->
-    if cursor >= source.length
-      return Token $.EOF, ""
-
-    for [ type, rx ] in MATCHLIST
-      if str = match-rx rx, source.slice cursor
-        cursor := cursor + str.length
-
-        if type in [ $.BLANK, $.SPACE, $.INDENT, $.COMMENT ]
-          return read!
-
-        if type is $.STRCOM
-          return Token $.STRING, str.trim-left!
-
-        return Token type, str
-
-    return Token $.UNKNOWN, source[cursor]
-
-
-  # Init
-
-  f      = 0
-  tokens = []
-
-  log \\n + (bright blue source) + \\n
-
-  while f < 1000
-    f := f + 1
-    next = read!
-
-    log (white pad 10, next.type), (grey '<-'),
-      trunc 50, (yellow clean-src next.value) + clean-src source.slice cursor
-
-    tokens.push next
-    break if tokens[*-1].type is $.EOF
-
-  log ""
-
-  return tokens
 
 
 #
@@ -84,7 +19,7 @@ export const tokenise = (source) ->
 
 export const parse = (source) ->
 
-  tokens = tokenise source
+  tokens = $.tokenise source
 
 
   #
@@ -118,7 +53,7 @@ export const parse = (source) ->
 
   eat = (type) ->
     if typeof type is \symbol
-      type := TAGS[type]
+      type := $[type]
 
     steps.push [ \EAT, dent, next, ilog "#{red \eat} #type" ]
 
@@ -126,7 +61,7 @@ export const parse = (source) ->
       error "Unexpected token (expected '#type', got #{next.type})"
 
     value = next.value
-    next := if tokens.length then tokens.shift! else Token \EOF, ""
+    next := if tokens.length then tokens.shift! else tk.new-eof!
     status!
 
     return value
@@ -530,6 +465,7 @@ export const parse = (source) ->
     | $.REALLIKE => RealLiteral!
     | $.CPLXLIKE => ComplexLiteral!
     | $.TIMELIKE => TimeLiteral!
+    | $.PATHLIKE => PathLiteral!
     | $.STRING   => StringLiteral!
     | $.SYMBOL   => Symbol!
     | _          => eat next.type; null
@@ -591,6 +527,12 @@ export const parse = (source) ->
       kind: \literal
       type: \AutoStr
       value: that.replace /^"/, '' .replace /"$/, ''
+
+  PathLiteral = wrap \PathLiteral ->
+    if eat $.PATHLIKE
+      kind: \literal
+      type: \AutoPath
+      value: that.split \/ .filter -> it
 
   Identifier = wrap \Identifier ->
     if eat $.IDENT

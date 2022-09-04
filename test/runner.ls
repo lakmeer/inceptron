@@ -83,7 +83,10 @@ module.exports = Runner = do ->
         output: result.output
         tokens: result.token-list
         exec: do
+          log "Exec INPUT"
           expect = Interpreter.run program.ast
+
+          log "Exec OUTPUT"
           actual = Interpreter.run result.output
           errors = []
 
@@ -198,9 +201,9 @@ module.exports = Runner = do ->
         log white "\n---\n"
 
         if ix is 0
-          log master "Test AST\n"
+          log (master "Test AST") + \\n
         else
-          log slave "Output AST\n"
+          log (slave "Output AST") + \\n
 
         if it.error
           log (minus \Exception), bright it.error

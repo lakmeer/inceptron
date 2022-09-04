@@ -84,12 +84,12 @@ class Attr
 class Value
   (@type, @reach, @value) ->
     if @value instanceof Array
-      @isList = true
+      @is-list = true
 
   toString: (d = 0) ->
     pad = "  " * d
 
-    if @isList
+    if @is-list
       head = white "<#{@type}`s [\n"
       pad + head + @value.map(-> it.to-string(d + 1)).join(\\n) +
       pad + "\n\]"
@@ -105,14 +105,38 @@ class Value
       | \Real, \AutoReal => pad + head + blue @value
       | \Cplx, \AutoCplx => pad + head + blue @value.txt
       | \Time, \AutoTime => pad + head + bright green @value
+      | \Time, \AutoPath => pad + head + bright magenta '/' + @value.join '/'
       | \Book, \AutoBool => pad + head + (if @value then (plus "?TRUE") else (minus "?FALSE"))
       | _        => pad + head + bright red "Unsupported Literal Type: #that"
 
   unwrap: ->
-    if @isList
+    if @type in <[ Path AutoPath ]>
+      log @value
+      \/ + @value.join \/
+    else if @is-list
       @value.map (.unwrap!)
     else
       @value
+
+
+class Lambda
+  (@type, @argtypes, @env, @main) ->
+    @kind = \lambda
+
+  eval: (args, env, trace) ->
+    new-env = env.fork!
+
+    log \λeval, args, @argtypes
+    # TODO: Runtime typecheck of args
+    for { value }, ix in args
+      { name, type } = @argtypes[ix].name
+      new-env.set name, new Value type, \local, value
+
+    return each @main, new-env, trace
+
+  to-string: ->
+    log \λ @argtypes
+    "λ (#{@argtypes.map -> it.type + " " + it.name}) -> #{@type}"
 
 
 class TreeNode
@@ -135,9 +159,8 @@ class TreeNode
     @attrs.push attr
 
   unwrap: ->
-    #log (yellow \unwrap), \Treenode @type
     if @children.length
-      last @children .unwrap!
+      last @children .unwrap?!
     else
       null
 
@@ -190,26 +213,21 @@ eval-expr = (expr, env, trace) ->
       new Attr expr.name, expr.args.map -> each it, env, trace
 
     | \decl-stmt =>
-      env[expr.name] = each expr.value, env, trace
+      env.set expr.name, each expr.value, env, trace
       trace [ \ENV, env ]
       new Nothing!
 
     | \assign =>
       ident = env[expr.left]
       value = each expr.right, env, trace
-
-      trace [ \xxx, \assign-value ]
-      trace [ \xxx, value ]
-      # TODO: Type check assignments
-      env[expr.left] = value
+      env.set expr.left, value
       new Nothing!
 
     | \ident =>
-      if env[expr.name]
+      if env.get expr.name
         that
       else
-        throw "Couldn't find variable '#{expr.name}' in scope"
-        new Nothing!
+        new Error \ReferenceError, "Couldn't find variable '#{expr.name}' in scope"
 
     | \yield =>
       each expr.main, env, trace
@@ -226,16 +244,15 @@ eval-expr = (expr, env, trace) ->
         trace [ \WARN, warn "Unsupported timing type: '#{expr.type}'" ]
 
     | \emit =>
-      trace [ \ENV expr ]
       args = expr.args.map -> each it, env, trace
-      env.on expr.name, ...args
+      env.emit expr.name, ...args
+
+    | \on =>
+      env.on expr.name, (...args) -> each  console.log \it, args
 
     | \binary =>
       left  = each expr.left, env, trace
       right = each expr.right, env, trace
-
-      trace [ \xxx left ]
-      trace [ \xxx right ]
 
       trace [ \ASSERT, assert "Left operand is a Value",  left  instanceof Value ]
       trace [ \ASSERT, assert "Right operand is a Value", right instanceof Value ]
@@ -250,33 +267,20 @@ eval-expr = (expr, env, trace) ->
         | \/  => left.value / right.value
         | \~  => left.value + right.value
         | \^  => Math.pow(left.value, right.value)
-        | \:= => log (red \:=), left, right
         | \== => left.value is right.value
         | _ =>
           trace [ \WARN, warn "Unsupported operator: '#{expr.oper}'" ]
           new Nothing!
 
     | \procdef =>
-      env[expr.name] = (...args) ->
-        # TODO: Typecheck args here
-        each expr.main, new-env, trace
-      new Nothing!
+      return env.set expr.name = new Lambda \Nothing, [], env.fork!, expr.main
 
     | \funcdef =>
-      env[expr.name] = (...args) ->
-        # TODO: Typecheck args here
-        new-env = env <<< { [ name, args[i] ] for { name }, i in expr.args }
-        trace [ \ENV, new-env ]
-        result = each expr.main, new-env, trace
-        trace [ \xxx, dump result ]
-        result
-
-      new Nothing!
+      return env.set expr.name = new Lambda expr.type, expr.args, env.fork!, expr.main
 
     | \call =>
-      trace [ \ENV, expr ]
       if env[expr.name]
-        env[expr.name](...expr.args)
+        that.eval expr.args, env, trace
       else
         new Error \ReferenceError, "Could not find referent of #{expr.name} in scope"
 
@@ -314,29 +318,30 @@ each = (expr, env, trace = ->) ->
 #
 
 class Env
-  ->
-    @store = {}
+  (@store = {}) ->
     @watch = []
 
   get:   (k) -> if @store[k] then that else null
   set:   (k, v) -> @store[k] = v; @emit \change, k, v
-  on:    (exp, λ) -> @watch.push [ ...exp.split(\!), λ ]
-  emit:  (ev, s, v) -> [ λ(v) for [ k, e, λ ] in @watch when @match ev, k, e, s ]
+  on:    (sel, λ) -> @watch.push [ ...sel.split(\!), λ ]
+  emit:  (ev, o, v) -> [ λ(v) for [ k, e, λ ] in @watch when @match ev, k, e, o ]
   match: (ev, k, e, s) -> ev is e
+  fork: ->
+    new Env { [ k, v ] for k, v of @store }
 
 export run = (root) ->
   tracestack = []
 
-  try
-    result = each root, (new Env!), tracestack~push
-    ast: root
-    error: false
-    result: result
-    trace: tracestack
+  #try
+  result = each root, (new Env!), tracestack~push
+  ast: root
+  error: false
+  result: result
+  trace: tracestack
 
-  catch ex
-    ast: root
-    error: ex.message
-    result: undefined
-    trace: tracestack
+  #catch ex
+    #ast: root
+    #error: ex.message
+    #result: undefined
+    #trace: tracestack
 

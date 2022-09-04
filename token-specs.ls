@@ -58,6 +58,7 @@ export LIBRARY = do
     * Spec \LiteralComplex        \CPLXLIKE         /^\d+(\.\d+)?e\d+(\.\d+(pi)?)?/, /^\d(\.\d+)?i\d+(\.\d+)?/
     * Spec \LiteralReal           \REALLIKE         /^\d+\.\d+/
     * Spec \LiteralInteger        \INTLIKE          /^\d+/
+    * Spec \LiteralPath           \PATHLIKE         /(\/(\w[-\w]*)|\/([\*]{1,2}))+\/?/
     * Spec \LiteralSymbol         \SYMBOL           /^`\w+/
     * Spec \LiteralBoolean        \BOOL             /^(true|false)\b/
     * Spec \LiteralNull           \NULL             /^null\b/
@@ -108,24 +109,14 @@ export LIBRARY = do
     * Spec \TypeIdentifier        \TYPE             /^[A-Z]\w+(`s)?/
     * Spec \Identifier            \IDENT            /^\w+/
 
-  Meta:
-    * Spec \EndOfFile             \EOF              /^$/
-    * Spec \UnknownToken          \UNKNOWN          /^$/
-
 
 # Helper Functions
 
-const token-group = (group) -> [ TAGS[tag] for { tag } in LIBRARY[group] ]
+const flat-spec   = [ tokens for _, tokens of LIBRARY ].flat!
+const taglist     = { [ tag, tag ] for { tag } in flat-spec }
+const token-group = (group) -> [ taglist[tag] for { tag } in LIBRARY[group] ]
 const one-of      = (types) -> -> types.includes if it.type then that else it
 const either      = (...ts) -> -> any [ ƒ it for ƒ in ts ]
-
-
-# Transformed Exports
-
-const FLAT_LIBRARY = [ tokens for _, tokens of LIBRARY ].flat!
-
-export TAGS      = { [ tag, tag ] for { tag } in FLAT_LIBRARY }
-export MATCHLIST = FLAT_LIBRARY.flat-map ({ tag, patterns }) -> patterns.map -> [ tag, it ]
 
 
 # Groups and membership checkers

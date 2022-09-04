@@ -42,4 +42,3 @@ export const dump = (thing, opt = { color: off }, d = 0) ->
   | \Number    => return _num thing.to-string!
   | \String    => return _str \" + thing + \"
   | \Undefined => return _dim "undefined"
-

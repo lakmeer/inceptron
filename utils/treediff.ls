@@ -72,7 +72,10 @@ module.exports = (a, b) ->
       if added isnt {}
         str += master dump added, {}, d
 
-    return str
+    if str.0 is \\n
+      return str.slice 1
+    else
+      return str
 
   diff.summary = traverse a
   diff.any = any-diffs diff

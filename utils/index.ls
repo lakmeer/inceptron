@@ -43,11 +43,19 @@ export const parse-time = (time) ->
 
   return time-val res
 
+
+# ParseRadians - automatically multiplies thru by π if it appears in the expression
+
 export const parse-radians = (rad) ->
   if rad.index-of(\pi) > -1
     PI * parse-float rad.replace \pi, ""
+  else if rad.index-of(\π\) > -1
+    PI * parse-float rad.replace \π, ""
   else
     parse-float rad
+
+
+# ParseComplex - turns compact rectangular (2i2) or polar (2e2π) complex numbers into objects
 
 export const parse-complex = (cplx) ->
   if cplx.index-of(\e) > -1
@@ -66,6 +74,15 @@ export const parse-complex = (cplx) ->
     a: atan2 im, re
   else
     throw "Not a complex number literal: #cplx"
+
+
+# ParsePath - reads path expressions including query params and so on
+
+export const parse-path = (path) ->
+  console.log path
+
+  return path
+
 
 
 # Traverse-Assert - recursively compare two nested ASTs
