@@ -327,22 +327,6 @@ class Env
 export run = (root) ->
   tracestack = []
 
-  console.clear!
-  console.log \butts
-
-  e = new Env!
-  e.set \a, 1
-  log e
-  log e.get \a
-  e.on \a!change, -> log \CHANGED: it
-  log e
-  e.emit \other \a
-  e.set \a, 2
-  log e
-
-
-  throw \halt
-
   try
     result = each root, (new Env!), tracestack~push
     ast: root
