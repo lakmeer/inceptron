@@ -168,6 +168,17 @@ List = (type, ...members) ->
   type: type
   members: members
 
+EmitStmt = (name, ...args) ->
+  kind: \emit
+  name: name
+  args: args
+
+OnStmt = (name, type, main) ->
+  kind: \on
+  type: type
+  name: name
+  main: main
+
 
 #
 # Test Cases
@@ -518,6 +529,17 @@ export DeclList =
   ast: Root DeclStmt \local \Int`s \numbers,
          List \Int, (AutoInt 1), (AutoInt 2), (AutoInt 3)
 
+export EventSyntax =
+  src: """
+    emit !poke;
+    on !poke {
+      emit !ouch
+    }
+  """
+  ast: Root do
+        EmitStmt \poke
+        OnStmt \poke, null, Scope EmitStmt \ouch
+
 
 #
 # Interpreter Tests
@@ -607,7 +629,21 @@ export FunctionDefineAndUse =
         Binary \* \AutoNum (AutoReal 2.0), (Ident \a)
       ExprStmt Call \double (AutoReal 3.0)
 
+export EmitAndCatchEvent =
+  src: """
+  " Emit and then catch an event
 
+  on !boop {
+    yield "Boop!"
+  }
+
+  emit !boop
+  """
+  val: "Boop!"
+  ast: Root do
+        ExprStmt AutoStr " Emit and then catch an event"
+        OnStmt \boop, null, Scope Yield AutoStr \Boop!
+        EmitStmt \boop
 
 
 /*

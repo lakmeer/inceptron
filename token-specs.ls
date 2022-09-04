@@ -40,6 +40,8 @@ export LIBRARY = do
     * Spec \KeywordYield          \YIELD            /^yield\b/
     * Spec \KeywordProc           \PROC             /^proc\b/
     * Spec \KeywordFunc           \FUNC             /^func\b/
+    * Spec \KeywordEmit           \EMIT             /^emit\b/
+    * Spec \KeywordOn             \ON               /^on\b/
 
   NonKeywordSymbols:
     * Spec \SpinalArrow           \ARR_LEFT         /^<-/
@@ -61,6 +63,7 @@ export LIBRARY = do
     * Spec \LiteralNull           \NULL             /^null\b/
     * Spec \LiteralString         \STRING           /^"[^"\n]*"/
     * Spec \LiteralStringComment  \STRCOM           /^"[^"\n]*$/, /^"[^"\n]*/
+    * Spec \LiteralEvent          \EVENT            /[!]\w+\b/
 
   UnaryOperators:
     * Spec \OpUnaryNot            \OP_NOT           /^not\b/

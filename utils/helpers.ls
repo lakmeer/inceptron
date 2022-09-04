@@ -25,11 +25,11 @@ export const clean-src  = (txt) -> txt.replace /\n/g, '⏎ '
 export const take       = (n, xs) -> if n <= 0 then xs.slice 0, 0 else xs.slice 0, n
 
 export const equivalent = (a, b) ->
-  if (a and typeof a is 'object') and (b and typeof b is 'object')
+  if (a and typeof a is \object) and (b and typeof b is \object)
     if Object.keys(a).length isnt Object.keys(b).length
       return false
 
-    for key in a when !equivalent a[key], b[key]
+    for key,val of a when not equivalent a[key], b[key]
       return false
 
     return true

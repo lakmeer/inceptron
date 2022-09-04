@@ -95,7 +95,7 @@ module.exports = Runner = do ->
           if actual.error
             errors.push (minus "Exec error") + ": Output AST threw " + slave actual.error
 
-          if has-output-test and program.val isnt actual.result?.unwrap!
+          if has-output-test and not equivalent program.val, actual.result?.unwrap!
             errors.push (minus "Exec mismatch") + ": Prescription and output diverge"
 
           if not equivalent expect.result?.unwrap!, actual.result?.unwrap!

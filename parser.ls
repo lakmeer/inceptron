@@ -190,6 +190,8 @@ export const parse = (source) ->
     | $.REACH      => DeclarationStatement!
     | $.REPEAT     => RepeatStatement!
     | $.OVER       => TimeStatement!
+    | $.EMIT       => EmitStatement!
+    | $.ON         => OnStatement!
     | $.YIELD      => Yield!
     | $.TREENODE   => TreeNode!
     | $.SCOPE_OPEN => Scope!
@@ -205,11 +207,15 @@ export const parse = (source) ->
     type  = eat $.TYPE
     ident = Identifier!
     eat $.OP_EQ
+    value = PrimaryExpression!
+    if value.kind is \list
+      value.type = type.replace \`s, ''
+
     kind:  \decl-stmt
     type:  type
     name:  ident.name
     reach: reach
-    value: PrimaryExpression!
+    value: value
 
   IfStatement = wrap \IfStatement ->
     eat $.IF
@@ -277,6 +283,31 @@ export const parse = (source) ->
     name: name
     type: type
     args: args
+    main:
+      if next.type is $.SCOPE_OPEN
+        Scope!
+      else
+        PrimaryExpression!
+
+  EmitStatement = wrap \EmitStatement ->
+    eat $.EMIT
+    name = eat $.EVENT .slice 1
+    args = []
+    while not next.type in [ $.NEWLINE, $.EOF, $.SCOPE_CLOSE ]
+      args.push Expression!
+      if next.type is $.COMMA => eat $.COMMA
+    kind: \emit
+    name: name
+    args: args
+
+  OnStatement = wrap \OnStatement ->
+    eat $.ON
+    type = null
+    if next.type is $.TYPE => type := eat $.TYPE
+    name = eat $.EVENT .slice 1
+    kind: \on
+    type: type
+    name: name
     main:
       if next.type is $.SCOPE_OPEN
         Scope!
@@ -355,10 +386,10 @@ export const parse = (source) ->
 
   PrimaryExpression = wrap \PrimaryExpression ~>
     switch true
-    | next.type is $.LIST_OPEN => ListLiteral!
-    | next.type is $.PAR_OPEN  => ParenExpression!
     | is-assign-op (peek 1)    => AssignmentExpression!
     | is-binary-op (peek 1)    => BinaryExpression!
+    | next.type is $.LIST_OPEN => ListLiteral!
+    | next.type is $.PAR_OPEN  => ParenExpression!
     | next.type is $.IDENT     =>
       if (peek 1) is $.PAR_OPEN
         FunctionCall!

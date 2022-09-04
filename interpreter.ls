@@ -109,8 +109,10 @@ class Value
       | _        => pad + head + bright red "Unsupported Literal Type: #that"
 
   unwrap: ->
-    #log (yellow \unwrap), \Value
-    @value
+    if @isList
+      @value.map (.unwrap!)
+    else
+      @value
 
 
 class TreeNode
@@ -223,6 +225,11 @@ eval-expr = (expr, env, trace) ->
       | _ =>
         trace [ \WARN, warn "Unsupported timing type: '#{expr.type}'" ]
 
+    | \emit =>
+      trace [ \ENV expr ]
+      args = expr.args.map -> each it, env, trace
+      env.on expr.name, ...args
+
     | \binary =>
       left  = each expr.left, env, trace
       right = each expr.right, env, trace
@@ -306,11 +313,38 @@ each = (expr, env, trace = ->) ->
 # Exported Interface
 #
 
+class Env
+  ->
+    @store = {}
+    @watch = []
+
+  get:   (k) -> if @store[k] then that else null
+  set:   (k, v) -> @store[k] = v; @emit \change, k, v
+  on:    (exp, λ) -> @watch.push [ ...exp.split(\!), λ ]
+  emit:  (ev, s, v) -> [ λ(v) for [ k, e, λ ] in @watch when @match ev, k, e, s ]
+  match: (ev, k, e, s) -> ev is e
+
 export run = (root) ->
   tracestack = []
 
+  console.clear!
+  console.log \butts
+
+  e = new Env!
+  e.set \a, 1
+  log e
+  log e.get \a
+  e.on \a!change, -> log \CHANGED: it
+  log e
+  e.emit \other \a
+  e.set \a, 2
+  log e
+
+
+  throw \halt
+
   try
-    result = each root, {}, tracestack~push
+    result = each root, (new Env!), tracestack~push
     ast: root
     error: false
     result: result
