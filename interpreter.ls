@@ -54,6 +54,7 @@ class Env
   set: (k, v) ->
     @store[k] = v
     @emit \change, k, v
+    trace [ \ENV, this ]
 
   on: (sel, λ) ->
     @watch.push [ ...sel.split(\!), λ ]
@@ -158,18 +159,16 @@ class Lambda
   eval: (args, env, trace) ->
     new-env = env.fork!
 
-    log \λeval, args, @argtypes
     # TODO: Runtime typecheck of args
     for { value }, ix in args
-      { name, type } = @argtypes[ix].name
+      { name, type } = @argtypes[ix]
       new-env.set name, new Value type, \local, value
-      trace [ \ENV, env ]
 
     return each @main, new-env, trace
 
-  to-string: ->
-    log \λ @argtypes
-    "λ (#{@argtypes.map -> it.type + " " + it.name}) -> #{@type}"
+  toString: (d = 0) ->
+    pad = "  " * d
+    pad + "#{bright magenta \<Lambda} λ(#{@argtypes.map (.type) .join ', '}) -> #{@type}"
 
 
 class TreeNode
@@ -247,21 +246,19 @@ eval-expr = (expr, env, trace) ->
 
     | \decl-stmt =>
       env.set expr.name, each expr.value, env, trace
-      trace [ \ENV, env ]
       new Nothing!
 
     | \assign =>
       ident = env[expr.left]
       value = each expr.right, env, trace
       env.set expr.left, value
-      trace [ \ENV, env ]
       new Nothing!
 
     | \ident =>
       if env.get expr.name
         that
       else
-        new Error \ReferenceError, "Couldn't find variable '#{expr.name}' in scope"
+        new Error \ReferenceError, "Could not find referent of '#{expr.name}' in scope"
 
     | \yield =>
       each expr.main, env, trace
@@ -279,12 +276,10 @@ eval-expr = (expr, env, trace) ->
 
     | \emit =>
       args = expr.args.map -> each it, env, trace
-      trace [ \ENV, env ]
       env.emit expr.name, ...args
 
     | \on =>
       env.on expr.name, (...args) -> each  console.log \it, args
-      trace [ \ENV, env ]
 
     | \binary =>
       left  = each expr.left, env, trace
@@ -297,13 +292,15 @@ eval-expr = (expr, env, trace) ->
 
       new Value expr.type, \local,
         switch expr.oper
-        | \+  => left.value + right.value
-        | \-  => left.value - right.value
-        | \*  => left.value * right.value
-        | \/  => left.value / right.value
-        | \~  => left.value + right.value
-        | \^  => Math.pow(left.value, right.value)
-        | \== => left.value is right.value
+        | \+   => left.value + right.value
+        | \-   => left.value - right.value
+        | \*   => left.value * right.value
+        | \/   => left.value / right.value
+        | \~   => left.value + right.value
+        | \^   => Math.pow(left.value, right.value)
+        | \==  => left.value is right.value
+        | \or  => left.value or right.value
+        | \and => left.value and right.value
         | _ =>
           trace [ \WARN, warn "Unsupported operator: '#{expr.oper}'" ]
           new Nothing!
@@ -311,17 +308,15 @@ eval-expr = (expr, env, trace) ->
     | \procdef =>
       proc = new Lambda \Nothing, [], env.fork!, expr.main
       env.set expr.name, proc
-      trace [ \ENV, env ]
       return proc
 
     | \funcdef =>
       func = new Lambda expr.type, expr.args, env.fork!, expr.main
       env.set expr.name, func
-      trace [ \ENV, env ]
       return func
 
     | \call =>
-      if env[expr.name]
+      if env.get expr.name
         that.eval expr.args, env, trace
       else
         new Error \ReferenceError, "Could not find referent of '#{expr.name}' in scope"

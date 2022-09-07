@@ -49,6 +49,7 @@ passing = (result) ->
   if exec-errors  => errors .= concat result.exec.errors
 
   passed: not (parse-errors or diff-errors or exec-errors)
+  no-exec: not result.exec.tested
   errors: errors
 
 
@@ -136,7 +137,15 @@ module.exports = Runner = do ->
 
     summary = " "
     for let result, ix in results
-      summary += bright if passing(result).passed then green ' ◉' else red ' ◯'
+      p = passing result
+      summary += bright do
+        if p.passed
+          if p.no-exec
+            blue ' ◉'
+          else
+            green ' ◉'
+        else
+          red ' ◯'
 
 
     # Select result from result set
@@ -202,7 +211,7 @@ module.exports = Runner = do ->
 
     | \Execute =>
       if exec.tested
-        log (bright "Expected Value:"), dump program.val, color: on
+        log (bright "Expected Value:"), dump program.val, color: on, 1
       else
         log bright blue "No expected value set for '#name'"
 
@@ -221,8 +230,7 @@ module.exports = Runner = do ->
         else
           log white "Tree:\n"
           log it.result?.to-string!
-          log white "\nValue:\n"
-          log dump it.result?.unwrap!, color: on
+          log (white "\nValue:"), dump it.result?.unwrap!, color: on, 1
 
       # Expectation
 

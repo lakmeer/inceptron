@@ -191,6 +191,7 @@ OnStmt = (name, type, main) ->
 
 export Degenerate =
   src: ""
+  val: null
   ast: Root!
 
 export HashComment =
@@ -223,6 +224,7 @@ export PathGlob =
 
 export ComplexLiterals =
   src: "0e0;2e0;1e2;2e0.5pi;3i0;2i2"
+  val: parse-complex \2i2
   ast: Root do
     ExprStmt AutoCplx \0e0
     ExprStmt AutoCplx \2e0
@@ -382,8 +384,9 @@ export BinaryBool =
   ast: Root ExprStmt Binary \==, \AutoBool, (AutoInt 2), (AutoInt 2)
 
 export BinaryVarBool =
-  src: "x == 2"
-  ast: Root ExprStmt Binary \==, \AutoBool, (Ident \x), (AutoInt 2)
+  src: "1 == 2"
+  val: false
+  ast: Root ExprStmt Binary \==, \AutoBool, (AutoInt 1), (AutoInt 2)
 
 export IfSimple =
   src: """
@@ -418,12 +421,14 @@ export BooleanKeywords =
     ExprStmt (AutoBool false)
 
 export LogicalKeywordsAnd =
-  src: "x and y"
-  ast: Root ExprStmt Binary \and, \AutoBool, (Ident \x), (Ident \y)
+  src: "true and true"
+  val: true
+  ast: Root ExprStmt Binary \and, \AutoBool, (AutoBool true), (AutoBool true)
 
 export LogicalKeywordsOr =
-  src: "x or y"
-  ast: Root ExprStmt Binary \or, \AutoBool, (Ident \x), (Ident \y)
+  src: "true or false"
+  val: true
+  ast: Root ExprStmt Binary \or, \AutoBool, (AutoBool true), (AutoBool false)
 
 export LogicalKeywordNot =
   src: "not x"
