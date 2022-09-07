@@ -72,7 +72,7 @@ module.exports = (a, b) ->
       if added isnt {}
         str += master dump added, {}, d
 
-    if str.0 is \\n
+    if d is 0 and str.0 is \\n
       return str.slice 1
     else
       return str

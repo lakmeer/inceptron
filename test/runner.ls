@@ -21,13 +21,14 @@ compact-step = ([ signal, dent, token, src ], ix) ->
   | \EAT   => "#{ magenta pad margin, token.type } |#{src}"
   | _      => "#{ grey    pad margin, token.type } |#{src}"
 
-format-trace = ([ kind, arg ]) ->
+format-trace = ([ kind, arg, b, c ]) ->
   switch kind
+  | \DUMP   => "    #{ white  \env } | ...\n#{dump arg}"
   | \ENV    => "    #{ white  \env } | #{arg.summary!map(([k,v]) -> "- #{bright yellow k}: #{v.to-string!}").join "\n        | "}"
   | \EVAL   => "   #{ blue   \eval } | #{arg}"
   | \WARN   => "   #{ yellow \warn } | #{arg}"
   | \ERR    => "  #{ red    \error } | #{arg}"
-  | \ASSERT => " #{ white  \assert } | #{arg}"
+  | \ASSERT => " #{ white  \assert } | #{(if arg then green else red)(b)}#{ if not arg then "#{white \|} #{c}" else ""}"
   | _       => "  #{ grey   \trace } | #{arg}"
 
 mode-menu = (mode) ->
@@ -83,14 +84,19 @@ module.exports = Runner = do ->
         output: result.output
         tokens: result.token-list
         exec: do
+          has-output-test = program.has-own-property \val
+
           log "Exec INPUT"
           expect = Interpreter.run program.ast
+          log dump expect
 
           log "Exec OUTPUT"
           actual = Interpreter.run result.output
-          errors = []
+          log dump actual
 
-          has-output-test = program.has-own-property \val
+          failed-asserts = actual.trace.filter ([ type, pass, desc, expl ]) -> type is \ASSERT and not pass
+
+          errors = []
 
           if expect.error
             errors.push (minus "Exec error") + ": Test AST threw " + master expect.error
@@ -103,6 +109,9 @@ module.exports = Runner = do ->
 
           if not equivalent expect.result?.unwrap!, actual.result?.unwrap!
             errors.push (minus "Exec mismatch") + ": Actual and Expected runs diverge"
+
+          if failed-asserts.length
+            errors.push (minus "Asserts Failed") + ": Output AST has failed ASSERT checks"
 
           target: program.val
           tested: has-output-test

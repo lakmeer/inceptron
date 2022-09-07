@@ -12,11 +12,11 @@ warn = -> log bright yellow it; it
 
 assert = (desc, a, b = true) ->
   if b instanceof Array and not b.includes a
-    log (red desc) + white " | expected one of [#{b.join \,}] but got `#a`"
+    [ false, desc, "expected one of [#{b.join \,}] but got `#a`" ]
   else if not b ~= a
-    log (red desc) + white " | expected `#b` but got `#a`"
+    [ false, desc, "expected `#b` but got `#a`" ]
   else
-    log bright green desc
+    [ true, desc ]
 
 
 # Reference constants
@@ -40,6 +40,38 @@ const TYPE_INHERITS =
   \AutoInt  : <[ Int AutoInt ]>
   \Real     : <[ Real AutoReal ]>
   \AutoReal : <[ Real AutoReal ]>
+
+
+# Environment
+
+class Env
+  (@store = {}) ->
+    @watch = []
+
+  get: (k) ->
+    if @store[k] then that else null
+
+  set: (k, v) ->
+    @store[k] = v
+    @emit \change, k, v
+
+  on: (sel, λ) ->
+    @watch.push [ ...sel.split(\!), λ ]
+
+  emit: (ev, o, v) ->
+    [ λ(v) for [ k, e, λ ] in @watch when @match ev, k, e, o ]
+
+  match: (ev, k, e, s) ->
+    ev is e
+
+  fork: ->
+    new Env { [ k, v ] for k, v of @store }
+
+  summary: ->
+    lines = []
+    for k, v of @store => lines.push [ k, v ]
+    #for it, ix in @watch => lines.push \???
+    lines
 
 
 # TODO: Move these to a common file (tree-nodes.ls) and import to both
@@ -131,6 +163,7 @@ class Lambda
     for { value }, ix in args
       { name, type } = @argtypes[ix].name
       new-env.set name, new Value type, \local, value
+      trace [ \ENV, env ]
 
     return each @main, new-env, trace
 
@@ -221,6 +254,7 @@ eval-expr = (expr, env, trace) ->
       ident = env[expr.left]
       value = each expr.right, env, trace
       env.set expr.left, value
+      trace [ \ENV, env ]
       new Nothing!
 
     | \ident =>
@@ -245,19 +279,21 @@ eval-expr = (expr, env, trace) ->
 
     | \emit =>
       args = expr.args.map -> each it, env, trace
+      trace [ \ENV, env ]
       env.emit expr.name, ...args
 
     | \on =>
       env.on expr.name, (...args) -> each  console.log \it, args
+      trace [ \ENV, env ]
 
     | \binary =>
       left  = each expr.left, env, trace
       right = each expr.right, env, trace
 
-      trace [ \ASSERT, assert "Left operand is a Value",  left  instanceof Value ]
-      trace [ \ASSERT, assert "Right operand is a Value", right instanceof Value ]
-      trace [ \ASSERT, assert "Left type is compatible",  left.type,  ACCEPTED_TYPES[expr.oper] ]
-      trace [ \ASSERT, assert "Right type is compatible", right.type, ACCEPTED_TYPES[expr.oper] ]
+      trace [ \ASSERT, ...assert "Left operand is a Value",  left  instanceof Value ]
+      trace [ \ASSERT, ...assert "Right operand is a Value", right instanceof Value ]
+      trace [ \ASSERT, ...assert "Left type is compatible",  left.type,  ACCEPTED_TYPES[expr.oper] ]
+      trace [ \ASSERT, ...assert "Right type is compatible", right.type, ACCEPTED_TYPES[expr.oper] ]
 
       new Value expr.type, \local,
         switch expr.oper
@@ -273,10 +309,16 @@ eval-expr = (expr, env, trace) ->
           new Nothing!
 
     | \procdef =>
-      return env.set expr.name, new Lambda \Nothing, [], env.fork!, expr.main
+      proc = new Lambda \Nothing, [], env.fork!, expr.main
+      env.set expr.name, proc
+      trace [ \ENV, env ]
+      return proc
 
     | \funcdef =>
-      return env.set expr.name, new Lambda expr.type, expr.args, env.fork!, expr.main
+      func = new Lambda expr.type, expr.args, env.fork!, expr.main
+      env.set expr.name, func
+      trace [ \ENV, env ]
+      return func
 
     | \call =>
       if env[expr.name]
@@ -298,8 +340,6 @@ each = (expr, env, trace = ->) ->
 
   yld = eval-expr expr, env, trace
 
-  trace [ \ENV, env ]
-
   # Analyse yielded blocks
   if yld instanceof TreeNode
     new-children = []
@@ -318,38 +358,6 @@ each = (expr, env, trace = ->) ->
 #
 # Exported Interface
 #
-
-class Env
-  (@store = {}) ->
-    @watch = []
-
-  get: (k) ->
-    if @store[k]
-      that
-    else
-      null
-
-  set: (k, v) ->
-    @store[k] = v
-    @emit \change, k, v
-
-  on: (sel, λ) ->
-    @watch.push [ ...sel.split(\!), λ ]
-
-  emit: (ev, o, v) ->
-    [ λ(v) for [ k, e, λ ] in @watch when @match ev, k, e, o ]
-
-  match: (ev, k, e, s) ->
-    ev is e
-
-  fork: ->
-    new Env { [ k, v ] for k, v of @store }
-
-  summary: ->
-    lines = []
-    for k, v of @store => lines.push [ k, v ]
-    #for it, ix in @watch => lines.push \???
-    lines
 
 export run = (root) ->
   tracestack = []
