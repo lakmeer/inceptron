@@ -273,16 +273,16 @@ eval-expr = (expr, env, trace) ->
           new Nothing!
 
     | \procdef =>
-      return env.set expr.name = new Lambda \Nothing, [], env.fork!, expr.main
+      return env.set expr.name, new Lambda \Nothing, [], env.fork!, expr.main
 
     | \funcdef =>
-      return env.set expr.name = new Lambda expr.type, expr.args, env.fork!, expr.main
+      return env.set expr.name, new Lambda expr.type, expr.args, env.fork!, expr.main
 
     | \call =>
       if env[expr.name]
         that.eval expr.args, env, trace
       else
-        new Error \ReferenceError, "Could not find referent of #{expr.name} in scope"
+        new Error \ReferenceError, "Could not find referent of '#{expr.name}' in scope"
 
     | \list =>
       new Value expr.type, \local, expr.members.map -> each it, env, trace
@@ -297,6 +297,8 @@ each = (expr, env, trace = ->) ->
   trace [ \EVAL, expr.kind, expr ]
 
   yld = eval-expr expr, env, trace
+
+  trace [ \ENV, env ]
 
   # Analyse yielded blocks
   if yld instanceof TreeNode
@@ -321,13 +323,33 @@ class Env
   (@store = {}) ->
     @watch = []
 
-  get:   (k) -> if @store[k] then that else null
-  set:   (k, v) -> @store[k] = v; @emit \change, k, v
-  on:    (sel, λ) -> @watch.push [ ...sel.split(\!), λ ]
-  emit:  (ev, o, v) -> [ λ(v) for [ k, e, λ ] in @watch when @match ev, k, e, o ]
-  match: (ev, k, e, s) -> ev is e
+  get: (k) ->
+    if @store[k]
+      that
+    else
+      null
+
+  set: (k, v) ->
+    @store[k] = v
+    @emit \change, k, v
+
+  on: (sel, λ) ->
+    @watch.push [ ...sel.split(\!), λ ]
+
+  emit: (ev, o, v) ->
+    [ λ(v) for [ k, e, λ ] in @watch when @match ev, k, e, o ]
+
+  match: (ev, k, e, s) ->
+    ev is e
+
   fork: ->
     new Env { [ k, v ] for k, v of @store }
+
+  summary: ->
+    lines = []
+    for k, v of @store => lines.push [ k, v ]
+    #for it, ix in @watch => lines.push \???
+    lines
 
 export run = (root) ->
   tracestack = []

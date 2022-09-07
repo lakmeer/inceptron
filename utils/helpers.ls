@@ -37,3 +37,5 @@ export const equivalent = (a, b) ->
   else
     a is b
 
+export const own-props = ->
+  { [ k, v ] for k, v of it when it.has-own-property k }

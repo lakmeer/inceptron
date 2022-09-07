@@ -1,4 +1,4 @@
-const { log, pad, pad-end, equivalent, select, limit, header, dump, big-header, clean-src, colors, treediff, any } = require \../utils
+const { log, pad, pad-end, equivalent, select, limit, dump, clean-src, colors, treediff, any, own-props } = require \../utils
 const { blue, magenta, cyan, bright, yellow, green, red, grey, white, plus, minus, invert, expect, master, slave } = colors
 
 MODES = <[ Tokens Steps Nodes Ast Diff Compare Execute ]>
@@ -23,7 +23,7 @@ compact-step = ([ signal, dent, token, src ], ix) ->
 
 format-trace = ([ kind, arg ]) ->
   switch kind
-  | \ENV    => "    #{ white  \env } | ...\n #{bright white dump arg}"
+  | \ENV    => "    #{ white  \env } | #{arg.summary!map(([k,v]) -> "- #{bright yellow k}: #{v.to-string!}").join "\n        | "}"
   | \EVAL   => "   #{ blue   \eval } | #{arg}"
   | \WARN   => "   #{ yellow \warn } | #{arg}"
   | \ERR    => "  #{ red    \error } | #{arg}"
@@ -142,7 +142,7 @@ module.exports = Runner = do ->
 
     log summary
     log yellow \┏ + ('━━' * current) + \━┛
-    log (yellow \┗), (bright white \===), (bright blue current),
+    log (yellow \┗), (bright white \===), (bright blue \# + current),
       '•', (bright if pass-details.passed then green \Passed else red \Failed),
       '•', (mode-menu mode),
       '•', (bright yellow name)
@@ -225,6 +225,10 @@ module.exports = Runner = do ->
         else
           log "Output execution traceback:"
           log exec.actual.trace?.map(format-trace).join \\n
+
+      else
+        log white "\n---\n"
+        log exec.actual.trace?.map(format-trace).join \\n
 
 
     | _ => throw "Unsupported inspector mode: #that"

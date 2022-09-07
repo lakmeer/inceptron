@@ -349,6 +349,18 @@ export DeclSingle =
   src: "local Int x = 42"
   ast: Root DeclStmt \local, \Int, \x, (AutoInt 42)
 
+export DeclAndUse =
+  src: """
+  local Real g = 2.0
+  local Real h = 0.5
+
+  yield g * h
+  """
+  ast: Root do
+    DeclStmt \local, \Real, \g, (AutoReal 2)
+    DeclStmt \local, \Real, \h, (AutoReal 1/2)
+    Yield Binary \* \AutoNum, (Ident \g), (Ident \h)
+
 export ReachKeywords =
   src: """
   local Int a = 1
