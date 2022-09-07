@@ -54,7 +54,6 @@ class Env
   set: (k, v) ->
     @store[k] = v
     @emit \change, k, v
-    trace [ \ENV, this ]
 
   on: (sel, λ) ->
     @watch.push [ ...sel.split(\!), λ ]
