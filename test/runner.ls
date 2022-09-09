@@ -21,15 +21,24 @@ compact-step = ([ signal, dent, token, src ], ix) ->
   | \EAT   => "#{ magenta pad margin, token.type } |#{src}"
   | _      => "#{ grey    pad margin, token.type } |#{src}"
 
+format-env = ({ vars, events }) ->
+  margin = "        | "
+  vars.map(([k,v]) -> "- #{bright yellow k}: #{v.to-string!}").join \\n + margin
+  dump events, color: on, 1
+
 format-trace = ([ kind, arg, b, c ]) ->
   switch kind
   | \DUMP   => "    #{ white  \env } | ...\n#{dump arg}"
-  | \ENV    => "    #{ white  \env } | #{arg.summary!map(([k,v]) -> "- #{bright yellow k}: #{v.to-string!}").join "\n        | "}"
+  | \ENV    => "    #{ white  \env } | #{format-env arg.summary!}"
   | \EVAL   => "   #{ blue   \eval } | #{arg}"
   | \WARN   => "   #{ yellow \warn } | #{arg}"
   | \ERR    => "  #{ red    \error } | #{arg}"
   | \ASSERT => " #{ white  \assert } | #{(if arg then green else red)(b)}#{ if not arg then "#{white \|} #{c}" else ""}"
   | _       => "  #{ grey   \trace } | #{arg}"
+
+format-src = (src) ->
+  [ (grey "#{pad 3, ix} | ") + white line for line, ix in src.split \\n ].join \\n
+
 
 mode-menu = (mode) ->
   switch MODES.index-of mode
@@ -166,7 +175,7 @@ module.exports = Runner = do ->
       '•', (bright yellow name)
 
     log ""
-    log white program.src
+    log format-src program.src
     log ""
 
 
@@ -182,7 +191,7 @@ module.exports = Runner = do ->
 
     switch mode
     | \Tokens =>
-      log '- ' + [ "#{white type}(#{yellow clean-src value})" for { type, value } in tokens ].join '\n- '
+      log '- ' + [ "#{bright cyan pad 3 "L#line"} #{cyan "[#{pad 3 start} -> #{pad-end 3 end}]"} #{white type}(#{yellow clean-src value})" for { type, value, start, end, line } in tokens ].join '\n- '
 
     | \Ast =>
       log dump output, color: on

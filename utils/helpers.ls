@@ -11,8 +11,8 @@ export const undef      = (is undefined)
 export const def        = (not) . undef
 export const join       = (.join '')
 export const defer      = (ƒ) -> set-timeout ƒ, 0
-export const pad        = (n, str="") -> ' ' * (n - str.length) + str
-export const pad-end    = (n, str="") -> str + (' ' * (n - str.length))
+export const pad        = (n, str="") -> ' ' * (n - str.to-string!length) + str
+export const pad-end    = (n, str="") -> str + (' ' * (n - str.to-string!length))
 export const any        = -> it.reduce (or), false
 export const all        = -> it.reduce (and), true
 export const limit      = (a, b, n) -> if n < a then a else if n > b then b else n

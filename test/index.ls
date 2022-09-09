@@ -358,6 +358,7 @@ export DeclAndUse =
 
   yield g * h
   """
+  val: 1.0
   ast: Root do
     DeclStmt \local, \Real, \g, (AutoReal 2)
     DeclStmt \local, \Real, \h, (AutoReal 1/2)
@@ -390,29 +391,62 @@ export BinaryVarBool =
 
 export IfSimple =
   src: """
-  if x == 69 {
-    x := 42
-  }
+  local Int x = 1
+
+  if x == 69 { x := 42 }
+
+  yield x
   """
-  ast: Root IfStmt do
-    Binary \==, \AutoBool,
-      Ident \x
-      AutoInt 69
-    Scope do
-      Assign \x, (AutoInt 42)
+  ast: Root do
+    DeclStmt \local, \Int, \x, (AutoInt 1)
+    IfStmt do
+      Binary \==, \AutoBool, (Ident \x), (AutoInt 69)
+      Scope Assign \x, (AutoInt 42)
+    Yield (Ident \x)
 
 export IfElse =
   src: """
+  local Int x = 69
+
   if x == 69 {
     x := 42
   } else {
     x := 420
   }
+
+  yield x
   """
-  ast: Root IfStmt do
+  val: 42
+  ast: Root do
+      DeclStmt \local, \Int, \x, (AutoInt 69)
+      IfStmt do
         Binary \==, \AutoBool, (Ident \x), (AutoInt 69)
         Scope Assign \x, (AutoInt 42)
         Scope Assign \x, (AutoInt 420)
+      Yield (Ident \x)
+
+export IfElseIf =
+  src: """
+  local Int x = 420
+
+  if x == 69 {
+    x := 42
+  } else if x == 420 {
+    x := 690
+  }
+
+  yield x
+  """
+  val: 690
+  ast: Root do
+      DeclStmt \local, \Int, \x, (AutoInt 420)
+      IfStmt do
+        Binary \==, \AutoBool, (Ident \x), (AutoInt 69)
+        Scope Assign \x, (AutoInt 42)
+        IfStmt do
+          Binary \==, \AutoBool, (Ident \x), (AutoInt 420)
+          Scope Assign \x, (AutoInt 690)
+      Yield (Ident \x)
 
 export BooleanKeywords =
   src: "true; false"
@@ -675,10 +709,36 @@ export EmitAndCatchEvent =
         OnStmt \boop, null, Scope Yield AutoStr \Boop!
         EmitStmt \boop
 
-
-
-
 /*
+export PrintBuiltin =
+  src: """
+  log("Hello, Sailor")
+  """
+  log: [ "Hello, Sailor" ]
+  val: null
+  ast: Root ExprStmt Call \log, AutoStr "Hello, Sailor"
+
+export FizzBuzzMini =
+  src: """
+    times 10 {
+      if it % 15 == 0 {
+        log "FizzBuzz"
+      }
+      else if it % 3 == 0 {
+        log "Fizz"
+      }
+      else if it % 5 == 0 {
+        log "Buzz"
+      }
+      else {
+        log it
+      }
+    }
+  """
+  ast: Root RepeatStmt 10, do
+    Scope do
+      IfStmt
+
 
 # Waiting on indentation
 

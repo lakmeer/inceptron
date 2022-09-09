@@ -8,8 +8,8 @@ const trunc = (n, txt) -> truncate n, (grey \...), (grey \:EOF), txt
 # Token value is ALWAYS a string. Any post-processing goes in the
 # parser function that turns this token into an AST node.
 
-export const Token = (type, value, start = 0, end = 0, line = 0) ->
-  { type, start, end, line, value, length: value?.length }
+export const Token = (type, value, start = 0, line = 0) ->
+  { type, start, end: start + value?.length - 1, line, value, length: value?.length }
 
 export const Spec = (name, tag, ...patterns) ->
   { name, tag, patterns }
@@ -24,8 +24,6 @@ module.exports = class Tokeniser
   # Constructor
 
   (@spec, @options = { logging: on }) ->
-
-    log \Tokeniser @spec
 
     # Add common defaults to spec
     @spec.last =
@@ -43,7 +41,7 @@ module.exports = class Tokeniser
   # Functions
 
   new-eof: ->
-    Token @EOF, ""
+    Token @EOF, "", @cursor, @line
 
   log: (...args) ->
     if @options.logging
@@ -57,22 +55,29 @@ module.exports = class Tokeniser
 
   read: ->
     if @cursor >= @input.length
-      return Token @EOF, ""
+      return @new-eof!
 
     for [ type, rx ] in @matchlist
       if str = @match-rx rx, @input.slice @cursor
+        start = @column
         @cursor := @cursor + str.length
+        @column := @column + str.length
+
+        if type in [ @NEWLINE ]
+          @line += 1
+          @column = 0
+          return @read!
 
         if type in [ @BLANK, @SPACE, @INDENT, @COMMENT ]
           return @read!
 
         if type is @STRCOM
-          return Token @STRING, str.trim-left!
+          return Token @STRING, str.trim-left!, start, @line
 
-        return Token type, str
+        return Token type, str, start, @line
 
     @cursor := @cursor + 1 # Eat one unknown char to stop looping
-    return Token @UNKNOWN, @input[@cursor]
+    return Token @UNKNOWN, @input[@cursor], @cursor - 1, @line
 
 
   # Main Tokeniser
@@ -83,6 +88,7 @@ module.exports = class Tokeniser
     # State
     @cursor = 0
     @line   = 0
+    @column = 0
     @tokens = []
 
 

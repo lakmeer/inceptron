@@ -56,7 +56,9 @@ class Env
     @emit \change, k, v
 
   on: (sel, λ) ->
+    log sel, λ
     @watch.push [ ...sel.split(\!), λ ]
+    log dump @watch
 
   emit: (ev, o, v) ->
     [ λ(v) for [ k, e, λ ] in @watch when @match ev, k, e, o ]
@@ -68,10 +70,9 @@ class Env
     new Env { [ k, v ] for k, v of @store }
 
   summary: ->
-    lines = []
-    for k, v of @store => lines.push [ k, v ]
-    #for it, ix in @watch => lines.push \???
-    lines
+    vars = for k, v of @store => [ k, v ]
+    events = for it, ix in @watch =>  it
+    { vars, events }
 
 
 # TODO: Move these to a common file (tree-nodes.ls) and import to both
@@ -97,6 +98,10 @@ class Nothing
   unwrap: ->
     #log (yellow \unwrap), \Nothing
     null
+
+class ArgType
+  (@name, @type, @init = null) ->
+    @kind = \arg
 
 class Attr
   (@name, @args) ->
@@ -153,6 +158,7 @@ class Value
 
 class Lambda
   (@type, @argtypes, @env, @main) ->
+    log \Lambda:, (dump @type), (dump @argtypes), (dump @main)
     @kind = \lambda
 
   eval: (args, env, trace) ->
@@ -279,15 +285,17 @@ eval-expr = (expr, env, trace) ->
 
     | \on =>
       env.on expr.name, (...args) -> each  console.log \it, args
+      trace [ \ENV env ]
 
     | \binary =>
+      op    = expr.oper
       left  = each expr.left, env, trace
       right = each expr.right, env, trace
 
       trace [ \ASSERT, ...assert "Left operand is a Value",  left  instanceof Value ]
       trace [ \ASSERT, ...assert "Right operand is a Value", right instanceof Value ]
-      trace [ \ASSERT, ...assert "Left type is compatible",  left.type,  ACCEPTED_TYPES[expr.oper] ]
-      trace [ \ASSERT, ...assert "Right type is compatible", right.type, ACCEPTED_TYPES[expr.oper] ]
+      trace [ \ASSERT, ...assert "Left type supports #op",  left.type,  ACCEPTED_TYPES[expr.oper] ]
+      trace [ \ASSERT, ...assert "Right type supports #op", right.type, ACCEPTED_TYPES[expr.oper] ]
 
       new Value expr.type, \local,
         switch expr.oper
@@ -311,6 +319,8 @@ eval-expr = (expr, env, trace) ->
 
     | \funcdef =>
       func = new Lambda expr.type, expr.args, env.fork!, expr.main
+      throw \stop
+      trace [ \DUMP, expr.args ]
       env.set expr.name, func
       return func
 
@@ -323,9 +333,19 @@ eval-expr = (expr, env, trace) ->
     | \list =>
       new Value expr.type, \local, expr.members.map -> each it, env, trace
 
+    | \if =>
+      ok = each expr.cond, env, trace
+      trace [ \DUMP, expr ]
+
+      switch ok.unwrap!
+      | true  => each expr.pass, env, trace
+      | false => each expr.fail, env, trace
+      | _ => new Error \InterpreterConfused, "IfStmt conditional expression returned a non-boolean: #{dump ok}"
+
     | _ =>
       trace [ \WARN, warn "Can't handle this kind of Expr: '#{expr.kind}'" ]
       new Nothing!
+
 
 
 each = (expr, env, trace = ->) ->
@@ -356,16 +376,19 @@ each = (expr, env, trace = ->) ->
 export run = (root) ->
   tracestack = []
 
-  #try
-  result = each root, (new Env!), tracestack~push
-  ast: root
-  error: false
-  result: result
-  trace: tracestack
+  # New Env
+  env = new Env!
 
-  #catch ex
-    #ast: root
-    #error: ex.message
-    #result: undefined
-    #trace: tracestack
+  try
+    result = each root, env, tracestack~push
+    ast: root
+    error: false
+    result: result
+    trace: tracestack
+
+  catch ex
+    ast: root
+    error: ex.message
+    result: undefined
+    trace: tracestack
 
