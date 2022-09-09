@@ -32,7 +32,7 @@ DeclStmt = (reach, type, name, value) ->
   else
     throw "Unsupported reach keyword: #reach"
 
-IfStmt = (cond, pass, fail = null) ->
+IfExpr = (cond, pass, fail = null) ->
   kind: \if
   cond: cond
   pass: pass
@@ -389,6 +389,29 @@ export BinaryVarBool =
   val: false
   ast: Root ExprStmt Binary \==, \AutoBool, (AutoInt 1), (AutoInt 2)
 
+export JustIf =
+  src: """
+  if true { 42 } else { 420 }
+  """
+  val: 42
+  ast: Root do
+    ExprStmt IfExpr do
+      AutoBool true
+      Scope ExprStmt AutoInt 42
+      Scope ExprStmt AutoInt 420
+
+export JustIfInverted =
+  src: """
+  if not true { 42 } else { 420 }
+  """
+  val: 420
+  ast: Root do
+    ExprStmt IfExpr do
+      Unary \not, \AutoBool, (AutoBool true)
+      Scope ExprStmt AutoInt 42
+      Scope ExprStmt AutoInt 420
+
+
 export IfSimple =
   src: """
   local Int x = 1
@@ -397,9 +420,10 @@ export IfSimple =
 
   yield x
   """
+  val: 1
   ast: Root do
     DeclStmt \local, \Int, \x, (AutoInt 1)
-    IfStmt do
+    ExprStmt IfExpr do
       Binary \==, \AutoBool, (Ident \x), (AutoInt 69)
       Scope Assign \x, (AutoInt 42)
     Yield (Ident \x)
@@ -419,7 +443,7 @@ export IfElse =
   val: 42
   ast: Root do
       DeclStmt \local, \Int, \x, (AutoInt 69)
-      IfStmt do
+      ExprStmt IfExpr do
         Binary \==, \AutoBool, (Ident \x), (AutoInt 69)
         Scope Assign \x, (AutoInt 42)
         Scope Assign \x, (AutoInt 420)
@@ -440,10 +464,10 @@ export IfElseIf =
   val: 690
   ast: Root do
       DeclStmt \local, \Int, \x, (AutoInt 420)
-      IfStmt do
+      ExprStmt IfExpr do
         Binary \==, \AutoBool, (Ident \x), (AutoInt 69)
         Scope Assign \x, (AutoInt 42)
-        IfStmt do
+        IfExpr do
           Binary \==, \AutoBool, (Ident \x), (AutoInt 420)
           Scope Assign \x, (AutoInt 690)
       Yield (Ident \x)
@@ -465,15 +489,17 @@ export LogicalKeywordsOr =
   ast: Root ExprStmt Binary \or, \AutoBool, (AutoBool true), (AutoBool false)
 
 export LogicalKeywordNot =
-  src: "not x"
-  ast: Root ExprStmt Unary \not, \AutoBool, (Ident \x)
+  src: "not true"
+  val: false
+  ast: Root ExprStmt Unary \not, \AutoBool, (AutoBool true)
 
 export LogicalKeywordNestedNot =
-  src: "not not not x"
+  src: "not not not false"
+  val: true
   ast: Root ExprStmt do
     Unary \not, \AutoBool,
       Unary \not, \AutoBool,
-        Unary \not, \AutoBool, (Ident \x)
+        Unary \not, \AutoBool, (AutoBool false)
 
 export Times =
   src: """times 4 { x := x + 1 }"""
@@ -737,7 +763,7 @@ export FizzBuzzMini =
   """
   ast: Root RepeatStmt 10, do
     Scope do
-      IfStmt
+      ExprStmt IfExpr
 
 
 # Waiting on indentation

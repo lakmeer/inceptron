@@ -33,12 +33,11 @@ format-trace = ([ kind, arg, b, c ]) ->
   | \EVAL   => "   #{ blue   \eval } | #{arg}"
   | \WARN   => "   #{ yellow \warn } | #{arg}"
   | \ERR    => "  #{ red    \error } | #{arg}"
-  | \ASSERT => " #{ white  \assert } | #{(if arg then green else red)(b)}#{ if not arg then "#{white \|} #{c}" else ""}"
+  | \ASSERT => " #{ white  \assert } | #{(if arg then green else red)(b)}#{ if not arg and c then "#{white \|} #{c}" else ""}"
   | _       => "  #{ grey   \trace } | #{arg}"
 
 format-src = (src) ->
   [ (grey "#{pad 3, ix} | ") + white line for line, ix in src.split \\n ].join \\n
-
 
 mode-menu = (mode) ->
   switch MODES.index-of mode
@@ -191,7 +190,7 @@ module.exports = Runner = do ->
 
     switch mode
     | \Tokens =>
-      log '- ' + [ "#{bright cyan pad 3 "L#line"} #{cyan "[#{pad 3 start} -> #{pad-end 3 end}]"} #{white type}(#{yellow clean-src value})" for { type, value, start, end, line } in tokens ].join '\n- '
+      log '- ' + [ "#{bright cyan pad 3 "L#line"} #{cyan "[#{pad 3 start}, #{pad-end 3 end}]"} #{white type}(#{yellow clean-src value})" for { type, value, start, end, line } in tokens ].join '\n- '
 
     | \Ast =>
       log dump output, color: on

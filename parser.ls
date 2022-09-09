@@ -118,7 +118,6 @@ export const parse = (source) ->
 
     switch next.type
     | $.NEWLINE    => eat $.NEWLINE
-    | $.IF         => IfStatement!
     | $.ATTR       => AttrStatement!
     | $.PROC       => ProcStatement!
     | $.FUNC       => FuncStatement!
@@ -152,25 +151,6 @@ export const parse = (source) ->
     reach: reach
     value: value
 
-  IfStatement = wrap \IfStatement ->
-    eat $.IF
-    cond = BinaryExpression!
-    pass = Scope!
-    fail = null
-
-    if next.type is $.NEWLINE
-      eat $.NEWLINE
-    if next.type is $.ELSE
-      eat $.ELSE
-      if next.type is $.SCOPE_OPEN
-        fail := Scope!
-      else
-        fail := BinaryExpression!
-
-    kind: \if
-    cond: cond
-    pass: pass
-    fail: fail
 
   RepeatStatement = wrap \RepeatStatement ->
     keyword = eat $.REPEAT
@@ -323,6 +303,7 @@ export const parse = (source) ->
     switch true
     | is-assign-op (peek 1)    => AssignmentExpression!
     | is-binary-op (peek 1)    => BinaryExpression!
+    | next.type is $.IF        => IfExpression!
     | next.type is $.LIST_OPEN => ListLiteral!
     | next.type is $.PAR_OPEN  => ParenExpression!
     | next.type is $.IDENT     =>
@@ -411,6 +392,28 @@ export const parse = (source) ->
       Literal!
     else
       Identifier!
+
+  IfExpression = wrap \IfExpression ->
+    eat $.IF
+    cond = Expression!
+    pass = Scope!
+    fail = null
+
+    if next.type is $.NEWLINE
+      eat $.NEWLINE
+    if next.type is $.ELSE
+      eat $.ELSE
+      if next.type is $.IF
+        fail := IfExpression!
+      else if next.type is $.SCOPE_OPEN
+        fail := Scope!
+      else
+        fail := BinaryExpression!
+
+    kind: \if
+    cond: cond
+    pass: pass
+    fail: fail
 
   FunctionCall = wrap \FunctionCall ->
     kind: \call

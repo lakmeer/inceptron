@@ -2,7 +2,7 @@
 # Require
 
 const { log, nop } = require \./helpers
-const { color, BRIGHT, BLACK, WHITE, RED, YELLOW, GREEN, BLUE, CYAN } = require \./colors
+const { color, bright, BRIGHT, BLACK, WHITE, RED, YELLOW, GREEN, BLUE, CYAN } = require \./colors
 
 
 #
@@ -10,11 +10,11 @@ const { color, BRIGHT, BLACK, WHITE, RED, YELLOW, GREEN, BLUE, CYAN } = require 
 #
 
 export const dump = (thing, opt = { color: off }, d = 0) ->
-  const _nul = if not opt.color then nop else color BRIGHT, CYAN + 10
+  const _nul = if not opt.color then nop else color BRIGHT, WHITE, CYAN + 10
   const _dim = if not opt.color then nop else color BRIGHT, BLACK
   const _key = if not opt.color then nop else color WHITE
-  const _tru = if not opt.color then nop else color BRIGHT, GREEN + 10
-  const _fal = if not opt.color then nop else color BRIGHT, RED + 10
+  const _tru = if not opt.color then nop else color BRIGHT, WHITE, GREEN + 10
+  const _fal = if not opt.color then nop else color BRIGHT, WHITE, RED + 10
   const _str = if not opt.color then nop else color BRIGHT, YELLOW
   const _num = if not opt.color then nop else color BRIGHT, BLUE
 
@@ -37,8 +37,8 @@ export const dump = (thing, opt = { color: off }, d = 0) ->
       str += "#pad#{_key "[#key]"} #{ dump val, opt, d + 1 }"
     return str
 
-  | \Null      => return _nul "null"
-  | \Boolean   => return (if thing then (_tru "true") else (_fal "false"))
+  | \Null      => return _nul " NULL "
+  | \Boolean   => return (if thing then (_tru " TRUE ") else (_fal " FALSE "))
   | \Number    => return _num thing.to-string!
   | \String    => return _str \" + thing + \"
   | \Undefined => return _dim "undefined"

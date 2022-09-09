@@ -14,7 +14,10 @@ assert = (desc, a, b = true) ->
   if b instanceof Array and not b.includes a
     [ false, desc, "expected one of [#{b.join \,}] but got `#a`" ]
   else if not b ~= a
-    [ false, desc, "expected `#b` but got `#a`" ]
+    if b === true
+      [ false, desc ]
+    else
+      [ false, desc, "expected `#b` but got `#a`" ]
   else
     [ true, desc ]
 
@@ -143,7 +146,7 @@ class Value
       | \Cplx, \AutoCplx => pad + head + blue @value.txt
       | \Time, \AutoTime => pad + head + bright green @value
       | \Time, \AutoPath => pad + head + bright magenta '/' + @value.join '/'
-      | \Book, \AutoBool => pad + head + (if @value then (plus "?TRUE") else (minus "?FALSE"))
+      | \Book, \AutoBool => pad + head + (if @value then (bright plus " TRUE ") else (bright minus " FALSE "))
       | _        => pad + head + bright red "Unsupported Literal Type: #that"
 
   unwrap: ->
@@ -287,15 +290,26 @@ eval-expr = (expr, env, trace) ->
       env.on expr.name, (...args) -> each  console.log \it, args
       trace [ \ENV env ]
 
+    | \unary =>
+      main = each expr.main, env, trace
+
+      trace [ \ASSERT, ...assert "Operand is a Value", main instanceof Value ]
+      trace [ \ASSERT, ...assert "Operand type supports `#{expr.oper}`", main.type, ACCEPTED_TYPES[expr.oper] ]
+
+      new Value expr.type, \local,
+        switch expr.oper
+        | \not => not main.unwrap!
+        | _ =>
+          trace [ \WARN, warn "Unsupported unary oprtator: '#{expr.oper}'" ]
+
     | \binary =>
-      op    = expr.oper
       left  = each expr.left, env, trace
       right = each expr.right, env, trace
 
       trace [ \ASSERT, ...assert "Left operand is a Value",  left  instanceof Value ]
       trace [ \ASSERT, ...assert "Right operand is a Value", right instanceof Value ]
-      trace [ \ASSERT, ...assert "Left type supports #op",  left.type,  ACCEPTED_TYPES[expr.oper] ]
-      trace [ \ASSERT, ...assert "Right type supports #op", right.type, ACCEPTED_TYPES[expr.oper] ]
+      trace [ \ASSERT, ...assert "Left type supports `#{expr.oper}`",  left.type,  ACCEPTED_TYPES[expr.oper] ]
+      trace [ \ASSERT, ...assert "Right type supports `#{expr.oper}`", right.type, ACCEPTED_TYPES[expr.oper] ]
 
       new Value expr.type, \local,
         switch expr.oper
@@ -335,11 +349,16 @@ eval-expr = (expr, env, trace) ->
 
     | \if =>
       ok = each expr.cond, env, trace
+
       trace [ \DUMP, expr ]
 
       switch ok.unwrap!
       | true  => each expr.pass, env, trace
-      | false => each expr.fail, env, trace
+      | false =>
+        if expr.fail
+          each expr.fail, env, trace
+        else
+          new Nothing!
       | _ => new Error \InterpreterConfused, "IfStmt conditional expression returned a non-boolean: #{dump ok}"
 
     | _ =>
