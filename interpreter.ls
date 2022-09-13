@@ -90,6 +90,7 @@ class Error
   unwrap: ->
     { @type, @text }
 
+
 class Nothing
   promote: (parent) ->
     return this
@@ -102,9 +103,11 @@ class Nothing
     #log (yellow \unwrap), \Nothing
     null
 
+
 class ArgType
   (@name, @type, @init = null) ->
     @kind = \arg
+
 
 class Attr
   (@name, @args) ->
@@ -120,6 +123,7 @@ class Attr
   unwrap: ->
     #log (yellow \unwrap), \Attr
     @args.map (.unwrap!)
+
 
 class Value
   (@type, @reach, @value) ->
@@ -145,13 +149,12 @@ class Value
       | \Real, \AutoReal => pad + head + blue @value
       | \Cplx, \AutoCplx => pad + head + blue @value.txt
       | \Time, \AutoTime => pad + head + bright green @value
-      | \Time, \AutoPath => pad + head + bright magenta '/' + @value.join '/'
-      | \Book, \AutoBool => pad + head + (if @value then (bright plus " TRUE ") else (bright minus " FALSE "))
+      | \Path, \AutoPath => pad + head + bright magenta '/' + @value.join '/'
+      | \Bool, \AutoBool => pad + head + (if @value then (bright plus " TRUE ") else (bright minus " FALSE "))
       | _        => pad + head + bright red "Unsupported Literal Type: #that"
 
   unwrap: ->
     if @type in <[ Path AutoPath ]>
-      log @value
       \/ + @value.join \/
     else if @is-list
       @value.map (.unwrap!)
@@ -271,7 +274,7 @@ eval-expr = (expr, env, trace) ->
     | \yield =>
       each expr.main, env, trace
 
-    | \timing =>
+    | \repeat =>
       switch expr.type
       | \forever =>
           # set-immediate -> each expr, env, trace

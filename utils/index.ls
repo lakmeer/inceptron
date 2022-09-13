@@ -27,6 +27,9 @@ export const parse-time = (time) ->
   res = {}
   val = ""
 
+  if typeof time is \number
+    return time-val ms: time
+
   while cursor < time.length
     char = time[cursor]
 
@@ -79,10 +82,7 @@ export const parse-complex = (cplx) ->
 # ParsePath - reads path expressions including query params and so on
 
 export const parse-path = (path) ->
-  console.log path
-
   return path
-
 
 
 # Traverse-Assert - recursively compare two nested ASTs

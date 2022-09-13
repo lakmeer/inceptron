@@ -82,40 +82,32 @@ AttrStmt = ->
   kind: \attr-stmt
   attr: it
 
-AutoBool = ->
-  kind: \literal
-  type: \AutoBool
-  value: !!it
 
-AutoInt = ->
-  kind: \literal
-  type: \AutoInt
-  value: it
+# Literal Nodes
 
-AutoStr = ->
+Literal = (type, value) -->
   kind: \literal
-  type: \AutoStr
-  value: it
+  type: type
+  value: value
 
-AutoTime = ->
-  kind: \literal
-  type: \AutoTime
-  value: if typeof! it is \String then parse-time it else it
+Bool = Literal \Bool
+Int  = Literal \Int
+Str  = Literal \Str
+Real = Literal \Real
+Cplx = (Literal \Cplx) . parse-complex
+Time = (Literal \Time) . parse-time
+Path = (...parts) -> Literal \Path parts
 
-AutoReal = ->
-  kind: \literal
-  type: \AutoReal
-  value: it
+AutoBool = Literal \AutoBool
+AutoInt  = Literal \AutoInt
+AutoStr  = Literal \AutoStr
+AutoReal = Literal \AutoReal
+AutoCplx = (Literal \AutoCplx) . parse-complex
+AutoTime = (Literal \AutoTime) . parse-time
+AutoPath = (...parts) -> Literal \AutoPath parts
 
-AutoCplx = ->
-  kind: \literal
-  type: \AutoCplx
-  value: parse-complex it
 
-AutoPath = (...parts) ->
-  kind: \literal
-  type: \AutoPath
-  value: parts
+# Other
 
 Symbol = ->
   kind: \symbol
@@ -216,10 +208,12 @@ export JustString =
 
 export PathLiteral =
   src: "/path/to/somewhere"
+  val: parse-path "/path/to/somewhere"
   ast: Root ExprStmt AutoPath \path \to \somewhere
 
 export PathGlob =
   src: "/path/**/*"
+  val: parse-path "/path/**/*"
   ast: Root ExprStmt AutoPath \path \** \*
 
 export ComplexLiterals =
@@ -342,14 +336,12 @@ export ImplicitMultiBlock =
     ExprStmt AutoInt 69
 
 export AssignmentExpression =
-  src: """
-  x := 2
-  """
+  src: "x := 2"
   ast: Root Assign \x, (AutoInt 2)
 
 export DeclSingle =
   src: "local Int x = 42"
-  ast: Root DeclStmt \local, \Int, \x, (AutoInt 42)
+  ast: Root DeclStmt \local, \Int, \x, (Int 42)
 
 export DeclAndUse =
   src: """
@@ -360,8 +352,8 @@ export DeclAndUse =
   """
   val: 1.0
   ast: Root do
-    DeclStmt \local, \Real, \g, (AutoReal 2)
-    DeclStmt \local, \Real, \h, (AutoReal 1/2)
+    DeclStmt \local, \Real, \g, (Real 2)
+    DeclStmt \local, \Real, \h, (Real 1/2)
     Yield Binary \* \AutoNum, (Ident \g), (Ident \h)
 
 export ReachKeywords =
@@ -373,11 +365,11 @@ export ReachKeywords =
   local Int e = 5
   """
   ast: Root do
-    DeclStmt \local, \Int, \a, (AutoInt 1)
-    DeclStmt \share, \Int, \b, (AutoInt 2)
-    DeclStmt \lift,  \Int, \c, (AutoInt 3)
-    DeclStmt \uniq,  \Int, \d, (AutoInt 4)
-    DeclStmt \local, \Int, \e, (AutoInt 5)
+    DeclStmt \local, \Int, \a, (Int 1)
+    DeclStmt \share, \Int, \b, (Int 2)
+    DeclStmt \lift,  \Int, \c, (Int 3)
+    DeclStmt \uniq,  \Int, \d, (Int 4)
+    DeclStmt \local, \Int, \e, (Int 5)
 
 export BinaryBool =
   src: "2 == 2"
@@ -422,7 +414,7 @@ export IfSimple =
   """
   val: 1
   ast: Root do
-    DeclStmt \local, \Int, \x, (AutoInt 1)
+    DeclStmt \local, \Int, \x, (Int 1)
     ExprStmt IfExpr do
       Binary \==, \AutoBool, (Ident \x), (AutoInt 69)
       Scope Assign \x, (AutoInt 42)
@@ -442,7 +434,7 @@ export IfElse =
   """
   val: 42
   ast: Root do
-      DeclStmt \local, \Int, \x, (AutoInt 69)
+      DeclStmt \local, \Int, \x, (Int 69)
       ExprStmt IfExpr do
         Binary \==, \AutoBool, (Ident \x), (AutoInt 69)
         Scope Assign \x, (AutoInt 42)
@@ -463,7 +455,7 @@ export IfElseIf =
   """
   val: 690
   ast: Root do
-      DeclStmt \local, \Int, \x, (AutoInt 420)
+      DeclStmt \local, \Int, \x, (Int 420)
       ExprStmt IfExpr do
         Binary \==, \AutoBool, (Ident \x), (AutoInt 69)
         Scope Assign \x, (AutoInt 42)
@@ -502,23 +494,30 @@ export LogicalKeywordNestedNot =
         Unary \not, \AutoBool, (AutoBool false)
 
 export Times =
-  src: """times 4 { x := x + 1 }"""
+  src: """
+  local Int x
+  times 4 { x := x + 1 }
+  yield x
+  """
   ast:
-    Root RepeatStmt (AutoInt 4),
-      Scope Assign \x,
-        Binary \+, \AutoNum, (Ident \x), (AutoInt 1)
+    Root do
+      DeclStmt \local, \Int, \x, Int 0
+      RepeatStmt (AutoInt 4),
+        Scope Assign \x,
+          Binary \+, \AutoNum, (Ident \x), (AutoInt 1)
+      Yield (Ident \x)
 
 export TimeUnits =
   src: "1s;2s;3m;4h1m;4h1m0ms;3h20s;500ms;"
   ast:
     Root do
-      ExprStmt AutoTime time-val s: 1
-      ExprStmt AutoTime time-val s: 2
-      ExprStmt AutoTime time-val m: 3
-      ExprStmt AutoTime time-val h: 4, m: 1
-      ExprStmt AutoTime time-val h: 4, m: 1, ms: 0
-      ExprStmt AutoTime time-val s: 20, h: 3
-      ExprStmt AutoTime time-val ms: 500
+      ExprStmt AutoTime \1s
+      ExprStmt AutoTime \2s
+      ExprStmt AutoTime \3m
+      ExprStmt AutoTime \4h1m
+      ExprStmt AutoTime \4h1m0ms
+      ExprStmt AutoTime \3h20s
+      ExprStmt AutoTime \500ms
 
 export Over =
   src: """over 2s { x := 5 }"""
@@ -557,8 +556,8 @@ export TreeProps =
 export TreeBody =
   src: "<Box\n  x := 3"
   ast:
-    Root TreeNode \Box, null,
-      Assign \x, (AutoInt 3)
+    Root TreeNode \Box,
+      ExprStmt Assign \x, (AutoInt 3)
 
 export DefineProcedure =
   src: """
@@ -658,7 +657,7 @@ export StatefulProgram =
   ast:
     Root do
       ExprStmt AutoStr " Simple Stateful Program"
-      DeclStmt \local, \Int, \x, (AutoInt 1)
+      DeclStmt \local, \Int, \x, (Int 1)
       Assign \x, (AutoInt 2)
       Yield Binary \+ \AutoNum, (Ident \x), (AutoInt 1)
 
@@ -679,7 +678,7 @@ export ExampleProgram =
   ast:
     Root do
       ExprStmt AutoStr " Example Program"
-      DeclStmt \local \Int \pad, (AutoInt 3)
+      DeclStmt \local \Int \pad, (Int 3)
       DeclStmt \share \Str \txt, (AutoStr "Hello, Sailor")
 
       TreeNode \Box, null,
@@ -700,7 +699,7 @@ export SetAndUseValue =
   ast:
     Root do
       ExprStmt AutoStr " Define and then use a simple value"
-      DeclStmt \local \Real \x (AutoReal 2.2)
+      DeclStmt \local \Real \x (Real 2.2)
       Yield (Ident \x)
 
 export FunctionDefineAndUse =

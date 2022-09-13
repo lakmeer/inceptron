@@ -1,6 +1,7 @@
 const { log, pad, pad-end, equivalent, select, limit, dump, clean-src, colors, treediff, any, own-props } = require \../utils
 const { blue, magenta, cyan, bright, yellow, green, red, grey, white, plus, minus, invert, expect, master, slave } = colors
 
+SHORTTERM = false
 MODES = <[ Tokens Steps Nodes Ast Diff Compare Execute ]>
 
 margin = 10
@@ -146,14 +147,17 @@ module.exports = Runner = do ->
     summary = " "
     for let result, ix in results
       p = passing result
-      summary += bright do
-        if p.passed
-          if p.no-exec
-            blue ' ◉'
-          else
-            green ' ◉'
-        else
-          red ' ◯'
+      summary += do
+
+        col = if p.passed and p.no-exec then blue
+              else if p.passed then green
+              else red
+
+        sym = \◉ # if p.passed then \◉ else \◯
+
+        if SHORTTERM then sym = ' '  + sym
+
+        col bright sym
 
 
     # Select result from result set
@@ -167,7 +171,7 @@ module.exports = Runner = do ->
     pass-details = passing result
 
     log summary
-    log yellow \┏ + ('━━' * current) + \━┛
+    log yellow \┏ + ('━' * current) + \┛
     log (yellow \┗), (bright white \===), (bright blue \# + current),
       '•', (bright if pass-details.passed then green \Passed else red \Failed),
       '•', (mode-menu mode),
@@ -236,9 +240,8 @@ module.exports = Runner = do ->
           log ""
           log it.trace?.map(format-trace).join \\n
         else
-          log white "Tree:\n"
           log it.result?.to-string!
-          log (white "\nValue:"), dump it.result?.unwrap!, color: on, 1
+          log (white "\n->"), dump it.result?.unwrap!, color: on, 1
 
       # Expectation
 

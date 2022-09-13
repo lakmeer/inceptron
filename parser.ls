@@ -11,6 +11,16 @@ Tokeniser = require \./tokeniser
 
 const $ = new Tokeniser LIBRARY
 
+const default-value-for-type = ->
+  | \Num,  \AutoNum  => 0
+  | \Int,  \AutoInt  => 0
+  | \Real, \AutoReal => 0.0
+  | \Cplx, \AutoCplx => parse-complex 0i0
+  | \Str,  \AutoStr  => ""
+  | \Time, \AutoTime => parse-time 0
+  | \Path, \AutoPath => [\/]
+  | \Bool, \AutoBool => false
+  | otherwise        => throw "No default value set for type `#it`"
 
 
 #
@@ -140,17 +150,25 @@ export const parse = (source) ->
     reach = eat $.REACH
     type  = eat $.TYPE
     ident = Identifier!
-    eat $.OP_EQ
-    value = PrimaryExpression!
+
+    if next.type is $.OP_EQ
+      eat $.OP_EQ
+      value = PrimaryExpression!
+    else
+      value = GhostLiteral type, default-value-for-type type
+
     if value.kind is \list
+      # TODO: Typecheck listiness with explicit decl type
       value.type = type.replace \`s, ''
+
+    # Align supplied value with declared type
+    value.type = type
 
     kind:  \decl-stmt
     type:  type
     name:  ident.name
     reach: reach
     value: value
-
 
   RepeatStatement = wrap \RepeatStatement ->
     keyword = eat $.REPEAT
@@ -489,12 +507,6 @@ export const parse = (source) ->
       kind: \symbol
       name: that.slice 1
 
-  NullLiteral = wrap \NullLiteral ->
-    if eat $.NULL
-      kind: \literal
-      type: \Null
-      value: null
-
   BooleanLiteral = wrap \BooleanLiteral ->
     if eat $.BOOL
       kind: \literal
@@ -542,6 +554,17 @@ export const parse = (source) ->
       kind: \ident
       name: that
       reach: \here
+
+
+  # Pseudonodes
+  #
+  # Injects AST nodes that aren't represented in the source code.
+  # Not going to consume tokens from the queue.
+
+  GhostLiteral = wrap \GhostLiteral (type, value) ->
+    kind: \literal
+    type: type
+    value: value
 
 
   # Init
