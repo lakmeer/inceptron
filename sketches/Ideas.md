@@ -16,8 +16,8 @@
   !args-event (a:Type, ...)
 
   # allow parent to inject code here
-  # refs passed by 'with' are visible 
-  @yield $ with ($alpha, &beta)
+  # refs passed here are visible 
+  $ $alpha, &beta
   
 }
 
@@ -47,7 +47,8 @@
   # throw yield away
   @do proc-name --boolean-flag
 
-  # yield custom value
-  @yield 20
-  
+  # procs defined here act like methods
+  @proc method (arg:Type) {
+    # call as $ref.method "value"
+  }
 }
