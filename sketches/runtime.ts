@@ -1,3 +1,31 @@
+`
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite + TS</title>
+    <script type="module" src="/src/main.ts"></script>
+    <style>
+      body {
+        background:#212121;
+        color: white;
+        white-space: pre;
+        font-family: monospace;
+        font-size: 24px;
+        padding: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <div id="d"></div>
+    <div id="out"></div>
+    <div id="panel"></div>
+  </body>
+</html>
+`
 
 const log = console.log.bind(console)
 
